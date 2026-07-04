@@ -11,8 +11,8 @@
   --red:#d94a3a;
   --shadow:0 24px 70px rgba(42,33,24,.12);
 }
-
 *{box-sizing:border-box}
+html{direction:rtl}
 body{
   margin:0;
   font-family:Assistant,Arial,sans-serif;
@@ -28,31 +28,66 @@ button{cursor:pointer}
   position:sticky;
   top:0;
   z-index:20;
-  background:rgba(255,248,236,.94);
+  background:rgba(255,248,236,.96);
   backdrop-filter:blur(18px);
   border-bottom:1px solid rgba(42,33,24,.08);
 }
 .topbarInner{
-  width:min(1180px,calc(100% - 32px));
-  height:76px;
+  width:min(1240px,calc(100% - 48px));
+  min-height:82px;
   margin:auto;
+  display:grid;
+  grid-template-columns:220px 1fr 150px;
+  align-items:center;
+  gap:24px;
+}
+.brand{
   display:flex;
   align-items:center;
-  justify-content:space-between;
-  gap:18px;
+  justify-content:flex-end;
+  min-width:220px;
+  overflow:visible;
+  text-decoration:none;
 }
-.logoSvg{width:154px;display:block}
-.desktopNav{display:none;align-items:center;gap:24px;font-size:17px;font-weight:850;color:#352a20}
-.desktopNav a{opacity:.78}
-.desktopNav a.active{opacity:1;color:var(--navy)}
+.logoSvg{
+  width:210px;
+  max-width:210px;
+  height:auto;
+  display:block;
+  overflow:visible;
+  flex:0 0 auto;
+}
+.desktopNav{
+  display:none;
+  align-items:center;
+  justify-content:center;
+  gap:26px;
+  font-size:17px;
+  font-weight:850;
+  color:#352a20;
+  white-space:nowrap;
+}
+.desktopNav a,
+.desktopNav a:visited{
+  color:#352a20;
+  opacity:.82;
+  text-decoration:none;
+}
+.desktopNav a:hover,
+.desktopNav a.active{
+  opacity:1;
+  color:var(--navy);
+}
 .whatsapp{
+  justify-self:start;
   display:inline-flex;
   align-items:center;
+  justify-content:center;
   gap:8px;
   border-radius:999px;
-  padding:11px 15px;
+  padding:12px 18px;
   background:var(--green);
-  color:#fff;
+  color:#fff!important;
   text-decoration:none;
   font-weight:900;
   box-shadow:0 12px 28px rgba(37,211,102,.28);
@@ -86,7 +121,6 @@ button{cursor:pointer}
   transition:.35s;
   border-radius:999px;
 }
-
 .screen{
   display:flex;
   flex-direction:column;
@@ -94,9 +128,8 @@ button{cursor:pointer}
   animation:fade .22s ease;
 }
 @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-
 .card{
-  background:rgba(255,255,255,.81);
+  background:rgba(255,255,255,.84);
   border:1px solid rgba(42,33,24,.08);
   border-radius:30px;
   padding:25px;
@@ -177,12 +210,6 @@ input{
   border:1px solid var(--line);
   box-shadow:none;
 }
-.actions button.danger,.danger{
-  background:#fff!important;
-  border:1px solid rgba(217,74,58,.28)!important;
-  color:var(--red)!important;
-  box-shadow:none!important;
-}
 .options{
   display:grid;
   gap:12px;
@@ -218,25 +245,6 @@ input{
   align-items:center;
   justify-content:center;
 }
-.chips{
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:10px;
-  margin-top:14px;
-}
-.chip{
-  border:1px solid var(--line);
-  background:#fffaf2;
-  border-radius:18px;
-  padding:16px;
-  text-align:center;
-  font-size:22px;
-  box-shadow:none;
-}
-.chip.active{
-  background:var(--navy);
-  color:#fff;
-}
 .mapMock{
   height:310px;
   background:linear-gradient(135deg,var(--navy),var(--navy2));
@@ -271,71 +279,6 @@ input{
   padding:14px;
 }
 .desktopVisual{display:none}
-.surfaceHead{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  gap:10px;
-  margin-bottom:10px;
-}
-.surfaceHead b{font-size:20px}
-.pill{
-  background:#fff7e5;
-  border:1px solid #f1d5a3;
-  border-radius:999px;
-  padding:7px 12px;
-  color:#8a5e00;
-  font-weight:900;
-  font-size:14px;
-}
-.dots{
-  display:flex;
-  gap:6px;
-  justify-content:center;
-  margin:13px 0;
-}
-.dots span{
-  width:10px;
-  height:10px;
-  border-radius:50%;
-  background:#e0d2bf;
-}
-.dots .active,.dots .done{background:var(--gold)}
-.canvasWrap{
-  background:linear-gradient(135deg,var(--navy),var(--navy2));
-  border-radius:28px;
-  position:relative;
-  overflow:hidden;
-  box-shadow:var(--shadow);
-  margin:15px 0;
-  border:1px solid rgba(255,255,255,.13);
-  height:430px;
-}
-canvas{
-  width:100%;
-  height:100%;
-  display:block;
-  touch-action:none;
-  background:linear-gradient(135deg,#0b2136,#071b2f);
-}
-.canvasOverlay{
-  position:absolute;
-  top:12px;
-  right:12px;
-  left:12px;
-  background:rgba(255,255,255,.92);
-  border:1px solid rgba(255,255,255,.62);
-  color:#17120d;
-  border-radius:18px;
-  padding:12px 14px;
-  font-weight:900;
-  box-shadow:0 12px 32px rgba(0,0,0,.18);
-  font-size:15px;
-  line-height:1.35;
-}
-.drawingActions{
-  grid-template-columns:1fr;
-}
 .toast,.surfaceTable{
   background:#fff;
   border:1px solid var(--line);
@@ -359,31 +302,6 @@ canvas{
 }
 .surfaceTable div:last-child{border-bottom:0}
 .surfaceTable span{color:var(--muted)}
-.analysis{
-  display:grid;
-  gap:12px;
-}
-.analysis div{
-  background:#fff;
-  border:1px solid var(--line);
-  border-radius:20px;
-  padding:16px;
-  font-weight:900;
-  animation:analysisIn .45s ease forwards;
-  opacity:.25;
-}
-@keyframes analysisIn{to{opacity:1;transform:none}}
-.analysis span{
-  background:var(--green);
-  color:white;
-  border-radius:50%;
-  width:26px;
-  height:26px;
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  margin-left:8px;
-}
 .results{
   display:grid;
   grid-template-columns:1fr 1fr;
@@ -408,32 +326,43 @@ canvas{
   margin-top:4px;
 }
 
+@media (max-width:849px){
+  .topbarInner{
+    width:calc(100% - 24px);
+    grid-template-columns:1fr auto;
+    min-height:70px;
+  }
+  .brand{min-width:0;justify-content:flex-end}
+  .logoSvg{width:150px;max-width:150px}
+  .whatsapp{padding:11px 14px}
+}
+
 @media (min-width:850px){
   .desktopNav{display:flex}
   .whatsapp span{display:inline}
-  .logoSvg{width:172px}
   .shell{
-    width:min(1180px,calc(100% - 52px));
-    padding-top:28px;
+    width:min(1240px,calc(100% - 64px));
+    padding-top:22px;
   }
+  .mobileMeta,.progress{display:none}
   .screen{
     display:grid;
-    grid-template-columns:.88fr 1.12fr;
+    grid-template-columns:1fr 1fr;
     gap:28px;
     align-items:stretch;
   }
   .card{
-    min-height:640px;
-    padding:34px;
+    min-height:560px;
+    padding:38px 42px;
   }
-  .desktopVisual{
-    display:block;
-  }
+  .desktopVisual{display:block;min-width:0}
   .desktopVisual .mapMock{
     height:100%;
-    min-height:640px;
+    min-height:560px;
     margin:0;
   }
-  .mobileMeta{font-size:14px}
-  .drawingActions{grid-template-columns:1fr 1fr 1fr}
+}
+
+@media (min-width:1200px){
+  .screen{grid-template-columns:0.92fr 1.08fr}
 }
