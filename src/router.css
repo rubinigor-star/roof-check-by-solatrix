@@ -1,0 +1,34 @@
+.mobileMenu a.active,
+.mobileMenu button.active {
+  border-color: rgba(245,161,26,.9);
+  background: #fff3d6;
+}
+
+.logoImage {
+  max-height: 54px;
+}
+
+@media (max-width: 680px) {
+  .headerInner {
+    min-height: 66px;
+  }
+
+  .brand,
+  .logoMark {
+    height: 56px;
+  }
+
+  .logoMark {
+    width: 152px;
+  }
+
+  .logoImage {
+    width: 148px;
+    max-height: 50px;
+  }
+
+  .mobileMenu a,
+  .mobileMenu button {
+    min-height: 50px;
+  }
+}
