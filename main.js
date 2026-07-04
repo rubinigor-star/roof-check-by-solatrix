@@ -86,15 +86,8 @@ function toggleObstacle(value) {
 }
 
 function logo() {
-  return `<div class="logoMark" aria-label="Solatrix Energy">
-    <svg class="logoIcon" viewBox="0 0 48 48" role="img" aria-hidden="true">
-      <circle cx="24" cy="24" r="21" class="logoSunHalo"></circle>
-      <path class="logoPanel" d="M9 29h30l-4 10H13L9 29Z"></path>
-      <path class="logoPanelLine" d="M16 29l-2 10M24 29v10M32 29l2 10M11 34h26"></path>
-      <path class="logoRay" d="M24 5v7M36 12l-5 5M43 24h-7M12 12l5 5M5 24h7"></path>
-    </svg>
-    <div class="logoText"><strong>Solatrix</strong><span>ENERGY</span></div>
-  </div>`;
+  const src = 'https://static.wixstatic.com/media/e34422_f461fb2e8382455e8d0d7ba9d71eca1e~mv2.png/v1/fill/w_298,h_194,al_c,q_90,enc_avif,quality_auto/Solatrix%20Logo%20Sait%20Main.png';
+  return `<div class="logoMark" aria-label="Solatrix Energy"><img class="logoImage" src="${src}" alt="Solatrix Energy" /></div>`;
 }
 
 function header() {
