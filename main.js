@@ -3,8 +3,19 @@ import { buildFullPdfReport } from './src/pdfReport.js';
 import { getLeads, saveLead, updateLeadStatus, LEAD_STATUSES } from './src/leadsStore.js';
 
 const CONFIG = { productionPerKw: 1650, buyRate: 0.64, sellRate: 0.48, installCostPerKw: 2900, sqmPerKw: 7, panelKw: 0.63, usableRoofFactor: 0.82, yearlyTariffGrowth: 0.04, yearlyPanelDegradation: 0.005, defaultPhone: '972547299727' };
-const LOGO_SRC = 'https://static.wixstatic.com/media/e34422_f461fb2e8382455e8d0d7ba9d71eca1e~mv2.png/v1/fill/w_298,h_194,al_c,q_90,enc_avif,quality_auto/Solatrix%20Logo%20Sait%20Main.png';
-const isAdminRoute = window.location.pathname.includes('/admin') || window.location.hash === '#admin';
+const LOGO_SRC = 'https://static.wixstatic.com/media/e34422_f461fb2e8382455e8d0d7ba9d71eca1e~mv2.png';
+const ROUTES = {
+  0: '/',
+  1: '/address',
+  2: '/roof',
+  3: '/draw',
+  4: '/obstacles',
+  5: '/analysis',
+  6: '/report',
+  7: '/admin'
+};
+const ROUTE_TO_STEP = Object.fromEntries(Object.entries(ROUTES).map(([step, route]) => [route, Number(step)]));
+const LEGACY_HASH_ROUTES = { '#admin': 7 };
 const shapePresets = [
   { points: '17,58 77,42 86,78 24,88', area: 74, orientation: 'South', factor: 1 },
   { points: '14,18 48,10 52,36 16,46', area: 36, orientation: 'East', factor: 0.88 },
@@ -12,11 +23,15 @@ const shapePresets = [
   { points: '28,42 55,35 63,58 35,66', area: 29, orientation: 'South-East', factor: 0.94 },
   { points: '48,62 82,56 86,77 52,84', area: 31, orientation: 'South-West', factor: 0.9 }
 ];
-const state = { step: isAdminRoute ? 7 : 0, address: '', monthlyBill: 850, roofType: '', leadName: '', leadPhone: '', surfaces: [], obstacles: [], leadSent: false, menuOpen: false, analysisTimer: null, selectedLeadId: null };
+const state = { step: currentStepFromLocation(), address: '', monthlyBill: 850, roofType: '', leadName: '', leadPhone: '', surfaces: [], obstacles: [], leadSent: false, menuOpen: false, analysisTimer: null, selectedLeadId: null };
 const steps = ['Start', 'Address', 'Roof', 'Draw', 'Obstacles', 'Analysis', 'Report', 'Admin'];
 
 function formatNumber(value) { return Math.round(value).toLocaleString('he-IL'); }
 function formatMoney(value) { return '₪' + formatNumber(value); }
+function normalizePath(pathname = window.location.pathname) { const path = pathname.replace(/\/+$/, '') || '/'; return path === '/index.html' ? '/' : path; }
+function currentStepFromLocation() { const path = normalizePath(); if (path in ROUTE_TO_STEP) return ROUTE_TO_STEP[path]; if (window.location.hash in LEGACY_HASH_ROUTES) return LEGACY_HASH_ROUTES[window.location.hash]; return 0; }
+function routeForStep(step) { return ROUTES[Math.max(0, Math.min(steps.length - 1, step))] || '/'; }
+function syncRoute(step, replace = false) { const nextPath = routeForStep(step); if (normalizePath() !== nextPath) { const method = replace ? 'replaceState' : 'pushState'; window.history[method]({}, '', nextPath); } }
 function createSurface(index) { return { id: index + 1, name: `Side ${index + 1}`, ...shapePresets[index % shapePresets.length] }; }
 function calculateSurface(surface) { const usableArea = Math.max(surface.area * CONFIG.usableRoofFactor, 0); const kw = usableArea / CONFIG.sqmPerKw; return { usableArea, kw, panels: Math.max(Math.floor(kw / CONFIG.panelKw), 1) }; }
 function ensureDefaultSurface() { if (!state.surfaces.length) state.surfaces = [createSurface(0)]; }
@@ -47,7 +62,7 @@ function createCurrentLead(report = calculateReport()) {
     status: 'חדש'
   });
 }
-function setStep(step) { clearTimeout(state.analysisTimer); state.menuOpen = false; state.step = Math.max(0, Math.min(steps.length - 1, step)); render(); if (state.step === 5) state.analysisTimer = setTimeout(() => setStep(6), 1800); }
+function setStep(step, options = {}) { clearTimeout(state.analysisTimer); state.menuOpen = false; state.step = Math.max(0, Math.min(steps.length - 1, step)); syncRoute(state.step, options.replace); render(); if (state.step === 5) state.analysisTimer = setTimeout(() => setStep(6), 1800); }
 function selectRoofType(type) { state.roofType = type; state.surfaces = []; render(); }
 function markRoof() { state.roofType === 'sloped' ? state.surfaces.push(createSurface(state.surfaces.length)) : state.surfaces = [createSurface(state.surfaces.length ? state.surfaces[0].id : 0)]; render(); }
 function removeRoofSide() { state.surfaces.pop(); render(); }
@@ -55,7 +70,8 @@ function toggleObstacle(value) { state.obstacles = state.obstacles.includes(valu
 function toggleMenu() { state.menuOpen = !state.menuOpen; render(); }
 function closeMenu() { if (state.menuOpen) { state.menuOpen = false; render(); } }
 function logo() { return `<div class="logoMark" aria-label="Solatrix Energy"><img class="logoImage" src="${LOGO_SRC}" alt="Solatrix Energy" /></div>`; }
-function header() { return `<header class="siteHeader ${state.menuOpen ? 'menuOpen' : ''}"><div class="headerInner"><a class="brand" href="#" data-action="step:0">${logo()}</a><div class="headerActions"><a class="headerCta" href="https://wa.me/${CONFIG.defaultPhone}" target="_blank" rel="noreferrer">WhatsApp</a><button class="menuBtn" data-action="toggleMenu">${state.menuOpen ? '×' : '☰'}</button></div></div><nav class="mobileMenu"><button data-action="step:0">ראשי</button><button data-action="step:1">כתובת וחשבון</button><button data-action="step:3">סימון גג</button><button data-action="step:6">דוח</button><a href="https://wa.me/${CONFIG.defaultPhone}" target="_blank" rel="noreferrer">WhatsApp</a></nav></header>`; }
+function navLink(step, label) { return `<a href="${routeForStep(step)}" data-action="route:${step}">${label}</a>`; }
+function header() { return `<header class="siteHeader ${state.menuOpen ? 'menuOpen' : ''}"><div class="headerInner"><a class="brand" href="/" data-action="route:0">${logo()}</a><div class="headerActions"><a class="headerCta" href="https://wa.me/${CONFIG.defaultPhone}" target="_blank" rel="noreferrer">WhatsApp</a><button class="menuBtn" data-action="toggleMenu" aria-label="תפריט">${state.menuOpen ? '×' : '☰'}</button></div></div><nav class="mobileMenu">${navLink(0, 'ראשי')}${navLink(1, 'כתובת וחשבון')}${navLink(3, 'סימון גג')}${navLink(6, 'דוח')}${navLink(7, 'ניהול')}${navLink(1, 'התחלה')}</nav></header>`; }
 function progress() { return state.step === 0 || state.step === 7 ? '' : `<div class="progressDots">${steps.slice(1, 7).map((_, i) => `<span class="${i + 1 <= state.step ? 'done' : ''}"></span>`).join('')}</div>`; }
 function actions(primary) { return `<div class="actions"><button class="primaryBtn" data-action="next">${primary}</button>${state.step > 1 ? '<button class="ghostBtn" data-action="prev">חזרה</button>' : ''}</div>`; }
 function floatingDecor() { return `<div class="floatingDecor" aria-hidden="true"><span>☀️</span><span>⚡</span><span>🏠</span><span>📍</span></div>`; }
@@ -87,9 +103,12 @@ function render() {
   root.innerHTML = `${header()}<main class="appShell" data-action="closeMenu">${renderScreen()}</main>`;
   root.querySelectorAll('[data-action]').forEach((node) => node.addEventListener('click', (event) => {
     const action = node.getAttribute('data-action'); if (action !== 'closeMenu') event.preventDefault(); if (node.disabled) return;
-    if (action === 'toggleMenu') toggleMenu(); if (action === 'closeMenu') closeMenu(); if (action === 'next') setStep(state.step + 1); if (action === 'prev') setStep(state.step - 1); if (action === 'markRoof') markRoof(); if (action === 'removeSide') removeRoofSide(); if (action === 'generatePdf') generatePdfReport(); if (action && action.startsWith('step:')) setStep(Number(action.split(':')[1])); if (action && action.startsWith('roof:')) selectRoofType(action.split(':')[1]); if (action && action.startsWith('obstacle:')) toggleObstacle(action.split(':')[1]); if (action && action.startsWith('selectLead:')) { state.selectedLeadId = action.split(':')[1]; render(); }
+    if (action === 'toggleMenu') toggleMenu(); if (action === 'closeMenu') closeMenu(); if (action === 'next') setStep(state.step + 1); if (action === 'prev') setStep(state.step - 1); if (action === 'markRoof') markRoof(); if (action === 'removeSide') removeRoofSide(); if (action === 'generatePdf') generatePdfReport(); if (action && action.startsWith('route:')) setStep(Number(action.split(':')[1])); if (action && action.startsWith('step:')) setStep(Number(action.split(':')[1])); if (action && action.startsWith('roof:')) selectRoofType(action.split(':')[1]); if (action && action.startsWith('obstacle:')) toggleObstacle(action.split(':')[1]); if (action && action.startsWith('selectLead:')) { state.selectedLeadId = action.split(':')[1]; render(); }
   }));
   root.querySelectorAll('[data-field]').forEach((node) => node.addEventListener('input', () => { state[node.getAttribute('data-field')] = node.value; }));
   root.querySelectorAll('[data-lead-status]').forEach((node) => node.addEventListener('change', () => { updateLeadStatus(node.getAttribute('data-lead-status'), node.value); render(); }));
 }
+window.addEventListener('popstate', () => { state.step = currentStepFromLocation(); state.menuOpen = false; render(); });
+if (window.location.hash in LEGACY_HASH_ROUTES) setStep(LEGACY_HASH_ROUTES[window.location.hash], { replace: true });
+else syncRoute(state.step, true);
 render();
