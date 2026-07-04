@@ -86,11 +86,19 @@ function toggleObstacle(value) {
 }
 
 function logo() {
-  return `<div class="logoMark" aria-label="Solatrix Energy"><div class="solarArc"></div><div class="logoText"><strong>Solatrix</strong><span>ENERGY</span></div><div class="sunDot"></div></div>`;
+  return `<div class="logoMark" aria-label="Solatrix Energy">
+    <svg class="logoIcon" viewBox="0 0 48 48" role="img" aria-hidden="true">
+      <circle cx="24" cy="24" r="21" class="logoSunHalo"></circle>
+      <path class="logoPanel" d="M9 29h30l-4 10H13L9 29Z"></path>
+      <path class="logoPanelLine" d="M16 29l-2 10M24 29v10M32 29l2 10M11 34h26"></path>
+      <path class="logoRay" d="M24 5v7M36 12l-5 5M43 24h-7M12 12l5 5M5 24h7"></path>
+    </svg>
+    <div class="logoText"><strong>Solatrix</strong><span>ENERGY</span></div>
+  </div>`;
 }
 
 function header() {
-  return `<header class="siteHeader"><div class="headerInner"><a class="brand" href="#" data-action="step:0">${logo()}</a><div class="headerActions"><a class="headerCta" href="https://wa.me/${CONFIG.defaultPhone}" target="_blank" rel="noreferrer">WhatsApp</a><button class="menuBtn">☰</button></div></div></header>`;
+  return `<header class="siteHeader"><div class="headerInner"><a class="brand" href="#" data-action="step:0">${logo()}</a><div class="headerActions"><a class="headerCta" href="https://wa.me/${CONFIG.defaultPhone}" target="_blank" rel="noreferrer">WhatsApp</a><button class="menuBtn" aria-label="Menu">☰</button></div></div></header>`;
 }
 
 function progress() {
@@ -102,46 +110,50 @@ function actions(primary) {
   return `<div class="actions"><button class="primaryBtn" data-action="next">${primary}</button>${state.step > 1 ? '<button class="ghostBtn" data-action="prev">חזרה</button>' : ''}</div>`;
 }
 
+function floatingDecor() {
+  return `<div class="floatingDecor" aria-hidden="true"><span>☀️</span><span>⚡</span><span>🏠</span><span>📍</span></div>`;
+}
+
 function mapMock() {
   const surfaceShapes = state.surfaces.map((surface, index) => `<polygon class="surface ${index === state.surfaces.length - 1 ? 'active' : ''}" points="${surface.points}"></polygon>`).join('');
   const pins = state.obstacles.map((_, index) => {
     const coords = [[42,36], [66,56], [72,28], [35,64], [58,24]][index % 5];
     return `<circle cx="${coords[0]}" cy="${coords[1]}" r="3.8"></circle>`;
   }).join('');
-  return `<div class="mapPanel"><svg class="roofCanvas" viewBox="0 0 100 100"><defs><pattern id="grid" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M 8 0 L 0 0 0 8" fill="none" /></pattern></defs><rect x="0" y="0" width="100" height="100" class="mapBase"></rect><rect x="0" y="0" width="100" height="100" fill="url(#grid)" class="mapGrid"></rect><path class="building" d="M12 14 L86 9 L92 82 L18 90 Z"></path>${surfaceShapes}<g class="obstaclePins">${pins}</g></svg></div>`;
+  return `<div class="mapPanel"><div class="mapBadge">Satellite scan</div><svg class="roofCanvas" viewBox="0 0 100 100"><defs><pattern id="grid" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M 8 0 L 0 0 0 8" fill="none" /></pattern></defs><rect x="0" y="0" width="100" height="100" class="mapBase"></rect><rect x="0" y="0" width="100" height="100" fill="url(#grid)" class="mapGrid"></rect><path class="building" d="M12 14 L86 9 L92 82 L18 90 Z"></path>${surfaceShapes}<g class="obstaclePins">${pins}</g></svg></div>`;
 }
 
 function heroScreen() {
-  return `<section class="screen heroScreen"><div class="card centerCard"><div class="eyebrow">Roof Check by Solatrix</div><h1>בדיקת גג סולארית</h1><button class="primaryBtn large" data-action="next">התחילו בדיקת גג</button></div></section>`;
+  return `<section class="screen heroScreen">${floatingDecor()}<div class="heroGrid"><div class="card centerCard heroCard"><div class="eyebrow">Roof Check by Solatrix</div><h1>בדיקת גג סולארית</h1><p class="heroText">תוך דקה מקבלים הערכה ראשונית: שטח שימושי, כמות פאנלים, ייצור שנתי ורווח צפוי.</p><button class="primaryBtn large" data-action="next">התחילו בדיקת גג</button></div><div class="visualCard"><div class="miniRoof"><div class="roofTop"></div><div class="panelRows"><span></span><span></span><span></span><span></span></div></div><div class="visualStats"><b>25+</b><span>שנות רווח</span></div><div class="visualStats second"><b>☀️</b><span>חישוב מהיר</span></div></div></div></section>`;
 }
 
 function addressScreen() {
-  return `<section class="screen"><div class="card focusCard">${progress()}<h2>מה כתובת הגג?</h2><input value="${state.address}" placeholder="לדוגמה: החרמון 10, חיפה" data-field="address" />${actions('מצא את הגג')}</div></section>`;
+  return `<section class="screen">${floatingDecor()}<div class="card focusCard">${progress()}<div class="screenIcon">📍</div><h2>מה כתובת הגג?</h2><p class="subText">נאתר את הגג ונכין בסיס לסימון שטח הפאנלים.</p><input value="${state.address}" placeholder="לדוגמה: החרמון 10, חיפה" data-field="address" />${actions('מצא את הגג')}</div></section>`;
 }
 
 function roofScreen() {
-  return `<section class="screen"><div class="card focusCard">${progress()}<h2>איזה סוג גג?</h2><div class="roofOptions"><button class="roofOption ${state.roofType === 'flat' ? 'selected' : ''}" data-action="roof:flat">גג שטוח</button><button class="roofOption ${state.roofType === 'sloped' ? 'selected' : ''}" data-action="roof:sloped">גג לא אחיד / כמה צדדים</button><button class="roofOption ${state.roofType === 'commercial' ? 'selected' : ''}" data-action="roof:commercial">גג מסחרי</button></div>${actions('המשך לסימון')}</div></section>`;
+  return `<section class="screen">${floatingDecor()}<div class="card focusCard">${progress()}<div class="screenIcon">🏠</div><h2>איזה סוג גג?</h2><div class="roofOptions"><button class="roofOption ${state.roofType === 'flat' ? 'selected' : ''}" data-action="roof:flat"><span>▰</span>גג שטוח</button><button class="roofOption ${state.roofType === 'sloped' ? 'selected' : ''}" data-action="roof:sloped"><span>◭</span>גג לא אחיד / כמה צדדים</button><button class="roofOption ${state.roofType === 'commercial' ? 'selected' : ''}" data-action="roof:commercial"><span>▦</span>גג מסחרי</button></div>${actions('המשך לסימון')}</div></section>`;
 }
 
 function drawScreen() {
   const isSloped = state.roofType === 'sloped';
   if (!isSloped && !state.surfaces.length) ensureDefaultSurface();
   const count = state.surfaces.length;
-  return `<section class="screen mapScreen"><div class="card mapCard">${progress()}<h2>${isSloped ? 'סמנו כל צד של הגג' : 'סמנו את שטח הגג'}</h2>${mapMock()}<div class="drawFooter">${isSloped ? `<div class="sideCount">${count} צדדים סומנו</div>` : ''}<div class="actions compactActions">${isSloped ? '<button class="primaryBtn" data-action="addSide">+ הוסף צד</button>' : '<button class="primaryBtn" data-action="setSingleRoof">סמן גג</button>'}${isSloped && count > 0 ? '<button class="ghostBtn" data-action="removeSide">בטל אחרון</button>' : ''}</div><button class="nextTextBtn" data-action="next" ${isSloped && count === 0 ? 'disabled' : ''}>סיימתי</button></div></div></section>`;
+  return `<section class="screen mapScreen"><div class="card mapCard">${progress()}<div class="screenIcon">✏️</div><h2>${isSloped ? 'סמנו כל צד של הגג' : 'סמנו את שטח הגג'}</h2>${mapMock()}<div class="drawFooter">${isSloped ? `<div class="sideCount">${count} צדדים סומנו</div>` : ''}<div class="actions compactActions">${isSloped ? '<button class="primaryBtn" data-action="addSide">+ הוסף צד</button>' : '<button class="primaryBtn" data-action="setSingleRoof">סמן גג</button>'}${isSloped && count > 0 ? '<button class="ghostBtn" data-action="removeSide">בטל אחרון</button>' : ''}</div><button class="nextTextBtn" data-action="next" ${isSloped && count === 0 ? 'disabled' : ''}>סיימתי</button></div></div></section>`;
 }
 
 function obstaclesScreen() {
-  const items = [['ac', 'מזגן'], ['boiler', 'דוד'], ['shade', 'צל'], ['access', 'יציאה לגג'], ['solar', 'קולטים קיימים']];
-  return `<section class="screen mapScreen"><div class="card mapCard">${progress()}<h2>מה נמצא על הגג?</h2>${mapMock()}<div class="obstacleGrid">${items.map(([key, label]) => `<button class="obstacle ${state.obstacles.includes(key) ? 'selected' : ''}" data-action="obstacle:${key}">${label}</button>`).join('')}</div>${actions('המשך')}</div></section>`;
+  const items = [['ac', 'מזגן', '❄️'], ['boiler', 'דוד', '💧'], ['shade', 'צל', '🌳'], ['access', 'יציאה לגג', '🚪'], ['solar', 'קולטים קיימים', '☀️']];
+  return `<section class="screen mapScreen"><div class="card mapCard">${progress()}<div class="screenIcon">🧩</div><h2>מה נמצא על הגג?</h2>${mapMock()}<div class="obstacleGrid">${items.map(([key, label, icon]) => `<button class="obstacle ${state.obstacles.includes(key) ? 'selected' : ''}" data-action="obstacle:${key}"><span>${icon}</span>${label}</button>`).join('')}</div>${actions('המשך')}</div></section>`;
 }
 
 function analysisScreen() {
-  return `<section class="screen"><div class="card centerCard analysisCard"><div class="loader"></div><h2>מנתחים את הגג...</h2></div></section>`;
+  return `<section class="screen">${floatingDecor()}<div class="card centerCard analysisCard"><div class="loader"></div><h2>מנתחים את הגג...</h2><p class="subText">בודקים שטח שימושי, כיוונים, הצללות ופוטנציאל ייצור.</p></div></section>`;
 }
 
 function reportScreen() {
   const report = calculateReport();
-  return `<section class="screen reportScreen"><div class="card reportCard"><div class="eyebrow">Solar report</div><h2>הגג מתאים למערכת של כ-${report.systemKw.toFixed(1)} kW</h2><div class="resultsGrid"><div><span>שטח גג</span><b>${formatNumber(report.roofArea)} m²</b></div><div><span>שטח שימושי</span><b>${formatNumber(report.usableArea)} m²</b></div><div><span>פאנלים</span><b>${report.panels}</b></div><div><span>ייצור שנתי</span><b>${formatNumber(report.annualProduction)} kWh</b></div><div><span>הכנסה שנתית</span><b>${formatMoney(report.annualRevenue)}</b></div><div><span>החזר השקעה</span><b>${report.payback.toFixed(1)} שנים</b></div><div><span>רווח 25 שנים</span><b>${formatMoney(report.profit25)}</b></div></div><div class="leadFields"><input placeholder="שם מלא" /><input placeholder="טלפון WhatsApp" /></div><button class="primaryBtn large" data-action="sendLead">קבלו PDF</button>${state.leadSent ? '<div class="successToast">הפרטים נשמרו.</div>' : ''}</div></section>`;
+  return `<section class="screen reportScreen">${floatingDecor()}<div class="card reportCard"><div class="eyebrow">Solar report</div><h2>הגג מתאים למערכת של כ-${report.systemKw.toFixed(1)} kW</h2><div class="resultsGrid"><div><span>שטח גג</span><b>${formatNumber(report.roofArea)} m²</b></div><div><span>שטח שימושי</span><b>${formatNumber(report.usableArea)} m²</b></div><div><span>פאנלים</span><b>${report.panels}</b></div><div><span>ייצור שנתי</span><b>${formatNumber(report.annualProduction)} kWh</b></div><div><span>הכנסה שנתית</span><b>${formatMoney(report.annualRevenue)}</b></div><div><span>החזר השקעה</span><b>${report.payback.toFixed(1)} שנים</b></div><div><span>רווח 25 שנים</span><b>${formatMoney(report.profit25)}</b></div></div><div class="leadFields"><input placeholder="שם מלא" /><input placeholder="טלפון WhatsApp" /></div><button class="primaryBtn large" data-action="sendLead">קבלו PDF</button>${state.leadSent ? '<div class="successToast">הפרטים נשמרו.</div>' : ''}</div></section>`;
 }
 
 function renderScreen() {
