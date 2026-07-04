@@ -25,6 +25,7 @@ const state = {
   surfaces: [],
   obstacles: [],
   leadSent: false,
+  menuOpen: false,
   analysisTimer: null
 };
 
@@ -66,6 +67,7 @@ function calculateReport() {
 
 function setStep(step) {
   clearTimeout(state.analysisTimer);
+  state.menuOpen = false;
   state.step = Math.max(0, Math.min(steps.length - 1, step));
   render();
   if (state.step === 5) state.analysisTimer = setTimeout(() => setStep(6), 1800);
@@ -79,6 +81,8 @@ function selectRoofType(type) {
 
 function addRoofSide() { state.surfaces.push(createSurface(state.surfaces.length)); render(); }
 function removeRoofSide() { state.surfaces.pop(); render(); }
+function toggleMenu() { state.menuOpen = !state.menuOpen; render(); }
+function closeMenu() { if (state.menuOpen) { state.menuOpen = false; render(); } }
 
 function toggleObstacle(value) {
   state.obstacles = state.obstacles.includes(value) ? state.obstacles.filter((item) => item !== value) : [...state.obstacles, value];
@@ -91,7 +95,23 @@ function logo() {
 }
 
 function header() {
-  return `<header class="siteHeader"><div class="headerInner"><a class="brand" href="#" data-action="step:0">${logo()}</a><div class="headerActions"><a class="headerCta" href="https://wa.me/${CONFIG.defaultPhone}" target="_blank" rel="noreferrer">WhatsApp</a><button class="menuBtn" aria-label="Menu">☰</button></div></div></header>`;
+  return `<header class="siteHeader ${state.menuOpen ? 'menuOpen' : ''}">
+    <div class="headerInner">
+      <a class="brand" href="#" data-action="step:0">${logo()}</a>
+      <div class="headerActions">
+        <a class="headerCta" href="https://wa.me/${CONFIG.defaultPhone}" target="_blank" rel="noreferrer">WhatsApp</a>
+        <button class="menuBtn" aria-label="Menu" aria-expanded="${state.menuOpen ? 'true' : 'false'}" data-action="toggleMenu">${state.menuOpen ? '×' : '☰'}</button>
+      </div>
+    </div>
+    <nav class="mobileMenu" aria-hidden="${state.menuOpen ? 'false' : 'true'}">
+      <button data-action="step:0">ראשי</button>
+      <button data-action="step:1">כתובת</button>
+      <button data-action="step:2">סוג גג</button>
+      <button data-action="step:3">סימון גג</button>
+      <button data-action="step:6">דוח</button>
+      <a href="https://wa.me/${CONFIG.defaultPhone}" target="_blank" rel="noreferrer">WhatsApp</a>
+    </nav>
+  </header>`;
 }
 
 function progress() {
@@ -161,12 +181,14 @@ function renderScreen() {
 
 function render() {
   const root = document.getElementById('root');
-  root.innerHTML = `${header()}<main class="appShell">${renderScreen()}</main>`;
+  root.innerHTML = `${header()}<main class="appShell" data-action="closeMenu">${renderScreen()}</main>`;
   root.querySelectorAll('[data-action]').forEach((node) => {
     node.addEventListener('click', (event) => {
-      event.preventDefault();
-      if (node.disabled) return;
       const action = node.getAttribute('data-action');
+      if (action !== 'closeMenu') event.preventDefault();
+      if (node.disabled) return;
+      if (action === 'toggleMenu') toggleMenu();
+      if (action === 'closeMenu') closeMenu();
       if (action === 'next') setStep(state.step + 1);
       if (action === 'prev') setStep(state.step - 1);
       if (action === 'addSide') addRoofSide();
