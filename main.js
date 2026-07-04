@@ -2,49 +2,38 @@ import './styles.css';
 
 const CONFIG = {
   productionPerKw: 1650,
-  buyRate: 0.64,
   sellRate: 0.48,
   installCostPerKw: 2900,
   sqmPerKw: 7,
   panelKw: 0.63,
+  usableRoofFactor: 0.82,
   defaultPhone: '972547299727'
 };
 
-const analysisSteps = [
-  'Roof geometry detected',
-  'Orientation calculated',
-  'Panel layout optimized',
-  'Annual production calculated',
-  'Financial report generated'
+const surfacesPreset = [
+  { id: 1, name: 'Main south roof', area: 74, orientation: 'South', factor: 1, points: '18,56 78,40 86,78 24,88' },
+  { id: 2, name: 'East wing', area: 36, orientation: 'East', factor: 0.88, points: '14,18 48,10 52,36 16,46' },
+  { id: 3, name: 'West service strip', area: 22, orientation: 'West', factor: 0.82, points: '58,14 86,18 80,38 56,34' }
 ];
 
-const surfacesPreset = [
-  { id: 1, name: 'Main south surface', area: 72, orientation: 'South', factor: 1, points: '18,56 78,40 86,78 24,88' },
-  { id: 2, name: 'East upper surface', area: 38, orientation: 'East', factor: 0.88, points: '14,18 48,10 52,36 16,46' },
-  { id: 3, name: 'West service zone', area: 24, orientation: 'West', factor: 0.82, points: '58,14 86,18 80,38 56,34' }
+const scanSteps = [
+  'Satellite image loaded',
+  'Roof edges detected',
+  'Usable area calculated automatically',
+  'Obstacles excluded',
+  'Solar estimate prepared'
 ];
 
 const state = {
   step: 0,
-  propertyType: 'home',
   address: '',
   roofType: 'flat',
-  monthlyBill: 850,
-  activeSurface: 0,
   surfaces: [surfacesPreset[0]],
-  obstacles: ['boiler', 'ac'],
+  activeSurface: 0,
   leadSent: false
 };
 
-const steps = [
-  'Start',
-  'Address',
-  'Roof',
-  'Draw',
-  'Obstacles',
-  'Analysis',
-  'Report'
-];
+const steps = ['Start', 'Address', 'Roof type', 'Auto scan', 'Obstacles', 'Report'];
 
 function formatNumber(value) {
   return Math.round(value).toLocaleString('he-IL');
@@ -55,7 +44,7 @@ function formatMoney(value) {
 }
 
 function calculateSurface(surface) {
-  const usableArea = Math.max(surface.area * 0.82, 0);
+  const usableArea = Math.max(surface.area * CONFIG.usableRoofFactor, 0);
   const kw = usableArea / CONFIG.sqmPerKw;
   const panels = Math.max(Math.floor(kw / CONFIG.panelKw), 1);
   return { usableArea, kw, panels };
@@ -65,15 +54,14 @@ function calculateReport() {
   const systemKw = state.surfaces.reduce((sum, surface) => sum + calculateSurface(surface).kw, 0);
   const weightedFactor = state.surfaces.reduce((sum, surface) => sum + surface.factor * calculateSurface(surface).kw, 0) / Math.max(systemKw, 1);
   const annualProduction = systemKw * CONFIG.productionPerKw * weightedFactor;
-  const annualConsumption = (Number(state.monthlyBill) * 12) / CONFIG.buyRate;
-  const selfConsumed = Math.min(annualProduction * 0.42, annualConsumption);
-  const exported = Math.max(annualProduction - selfConsumed, 0);
-  const annualSavings = selfConsumed * CONFIG.buyRate + exported * CONFIG.sellRate;
+  const annualRevenue = annualProduction * CONFIG.sellRate;
   const cost = systemKw * CONFIG.installCostPerKw;
-  const payback = cost / Math.max(annualSavings, 1);
-  const profit25 = annualSavings * 25 - cost;
+  const payback = cost / Math.max(annualRevenue, 1);
+  const profit25 = annualRevenue * 25 - cost;
   const panels = state.surfaces.reduce((sum, surface) => sum + calculateSurface(surface).panels, 0);
-  return { systemKw, annualProduction, annualSavings, cost, payback, profit25, panels };
+  const roofArea = state.surfaces.reduce((sum, surface) => sum + surface.area, 0);
+  const usableArea = state.surfaces.reduce((sum, surface) => sum + calculateSurface(surface).usableArea, 0);
+  return { systemKw, annualProduction, annualRevenue, cost, payback, profit25, panels, roofArea, usableArea };
 }
 
 function setStep(step) {
@@ -121,7 +109,6 @@ function header() {
           <a href="#">בתים פרטיים</a>
           <a href="#">מסחרי</a>
           <a href="#" class="active">בדיקת גג</a>
-          <a href="#">שאלות</a>
         </nav>
         <a class="headerCta" href="https://wa.me/${CONFIG.defaultPhone}" target="_blank" rel="noreferrer">WhatsApp</a>
       </div>
@@ -131,10 +118,7 @@ function header() {
 function progress() {
   const percent = ((state.step + 1) / steps.length) * 100;
   return `
-    <div class="flowMeta">
-      <span>${steps[state.step]}</span>
-      <span>${state.step + 1}/${steps.length}</span>
-    </div>
+    <div class="flowMeta"><span>${steps[state.step]}</span><span>${state.step + 1}/${steps.length}</span></div>
     <div class="progressBar"><div style="width:${percent}%"></div></div>`;
 }
 
@@ -146,9 +130,10 @@ function buttonRow(primary = 'המשך', secondary = 'חזרה') {
     </div>`;
 }
 
-function optionCard(label, text, active, action) {
+function optionCard(icon, label, text, active, action) {
   return `
     <button class="optionCard ${active ? 'selected' : ''}" data-action="${action}">
+      <span class="optionIcon">${icon}</span>
       <span class="optionCopy"><b>${label}</b><small>${text}</small></span>
       <span class="optionCheck">${active ? '✓' : '›'}</span>
     </button>`;
@@ -160,32 +145,45 @@ function mapMock(mode = 'intro') {
     return `<polygon class="${cls}" points="${surface.points}"></polygon>`;
   }).join('');
 
-  const pins = mode === 'obstacles' ? `
+  const pins = mode === 'obstacles' || mode === 'scan' ? `
     <g class="obstaclePins">
       <circle cx="42" cy="36" r="3.6"></circle><text x="42" y="34">AC</text>
       <circle cx="66" cy="56" r="3.6"></circle><text x="66" y="54">B</text>
       <circle cx="72" cy="28" r="3.6"></circle><text x="72" y="26">S</text>
     </g>` : '';
 
+  const rays = `
+    <g class="sunRays">
+      <line x1="6" y1="8" x2="28" y2="27"></line>
+      <line x1="2" y1="25" x2="25" y2="39"></line>
+      <line x1="10" y1="44" x2="31" y2="52"></line>
+    </g>`;
+
   return `
     <div class="mapPanel ${mode}">
-      <div class="mapTopline">
-        <span>Satellite roof workspace</span>
-        <b>GovMap-ready</b>
-      </div>
+      <div class="mapTopline"><span>Satellite roof workspace</span><b>Auto area</b></div>
       <svg class="roofCanvas" viewBox="0 0 100 100" role="img" aria-label="Roof drawing mockup">
         <defs>
-          <pattern id="grid" width="8" height="8" patternUnits="userSpaceOnUse">
-            <path d="M 8 0 L 0 0 0 8" fill="none" />
-          </pattern>
+          <pattern id="grid" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M 8 0 L 0 0 0 8" fill="none" /></pattern>
         </defs>
         <rect x="0" y="0" width="100" height="100" class="mapBase"></rect>
         <rect x="0" y="0" width="100" height="100" fill="url(#grid)" class="mapGrid"></rect>
+        ${rays}
         <path class="building" d="M12 14 L86 9 L92 82 L18 90 Z"></path>
         ${surfaceShapes}
         ${pins}
       </svg>
-      <div class="mapHint">${mode === 'draw' ? 'Draw each roof surface. Completed surfaces turn Solatrix gold.' : 'High fidelity map mockup. API integration comes next.'}</div>
+      <div class="mapHint">${mode === 'scan' ? 'המערכת מחשבת את שטח הגג אוטומטית מתוך הסימון על המפה.' : 'המשתמש לא מקליד שטח — הוא מסמן גג והממשק מחשב לבד.'}</div>
+    </div>`;
+}
+
+function statPills() {
+  const report = calculateReport();
+  return `
+    <div class="statPills">
+      <div><span>Roof area</span><b>${formatNumber(report.roofArea)} m²</b></div>
+      <div><span>Usable area</span><b>${formatNumber(report.usableArea)} m²</b></div>
+      <div><span>Panels</span><b>${report.panels}</b></div>
     </div>`;
 }
 
@@ -197,10 +195,7 @@ function surfaceList() {
         return `
           <div class="surfaceItem ${index === state.activeSurface ? 'current' : ''}">
             <div class="surfaceStatus">✓</div>
-            <div>
-              <b>${surface.name}</b>
-              <small>${surface.area} m² · ${surface.orientation} · ${calc.panels} panels</small>
-            </div>
+            <div><b>${surface.name}</b><small>${surface.area} m² detected · ${surface.orientation} · ${calc.panels} panels</small></div>
           </div>`;
       }).join('')}
     </div>`;
@@ -211,17 +206,13 @@ function heroScreen() {
     <section class="heroGrid">
       <div class="heroCopy">
         <div class="eyebrow">Roof Check by Solatrix</div>
-        <h1>בדיקת גג סולארית שנראית ומרגישה כמו מוצר פרימיום.</h1>
-        <p>המשתמש מסמן את הגג, מקבל הערכת מערכת, ייצור שנתי, חיסכון, החזר השקעה ודוח ראשוני — בממשק שמוכן לחיבור GovMap, PDF ו-CRM.</p>
+        <h1>בדיקת גג סולארית מהירה, ויזואלית וחכמה.</h1>
+        <p>כל מסך עושה פעולה אחת בלבד: כתובת, סוג גג, סימון על מפה, מכשולים ודוח. בלי שאלות מיותרות על חשבון חשמל ובלי הקלדת שטח ידנית.</p>
         <div class="heroActions">
           <button class="primaryBtn large" data-action="next">התחילו בדיקת גג</button>
           <a class="textLink" href="https://wa.me/${CONFIG.defaultPhone}" target="_blank" rel="noreferrer">דברו עם Solatrix</a>
         </div>
-        <div class="trustStrip">
-          <span>1650 kWh/kWp/year</span>
-          <span>2,900 ₪/kW</span>
-          <span>25-year report</span>
-        </div>
+        <div class="trustStrip"><span>Auto roof area</span><span>No battery questions</span><span>Visual solar report</span></div>
       </div>
       <div class="heroVisual">${mapMock('intro')}</div>
     </section>`;
@@ -229,103 +220,85 @@ function heroScreen() {
 
 function addressScreen() {
   return `
-    <section class="productGrid">
-      <div class="productCard">
+    <section class="singleFocus">
+      <div class="productCard focusCard">
         ${progress()}
-        <div class="eyebrow">Address</div>
-        <h2>איפה נמצא הגג?</h2>
-        <p>בגרסה הסופית נחבר חיפוש כתובות של ישראל. כרגע הממשק כבר בנוי בדיוק לשלב הזה.</p>
-        <label>כתובת בישראל</label>
+        <div class="screenIcon">⌖</div>
+        <div class="eyebrow">Step 1</div>
+        <h2>מה הכתובת של הגג?</h2>
+        <p>בשלב הזה יש רק פעולה אחת: למצוא את הנכס על המפה.</p>
         <input value="${state.address}" placeholder="לדוגמה: החרמון 10, חיפה" data-field="address" />
-        <div class="microNote">Next: GovMap / Israel parcel and satellite layer.</div>
         ${buttonRow('מצא את הגג')}
       </div>
-      <div class="sidePanel">${mapMock('address')}</div>
+      <div class="sidePanel visualOnly">${mapMock('address')}</div>
     </section>`;
 }
 
 function roofScreen() {
   return `
-    <section class="productGrid">
-      <div class="productCard">
+    <section class="singleFocus">
+      <div class="productCard focusCard">
         ${progress()}
-        <div class="eyebrow">Roof profile</div>
-        <h2>איזה סוג גג בודקים?</h2>
+        <div class="screenIcon">⌂</div>
+        <div class="eyebrow">Step 2</div>
+        <h2>איזה גג אנחנו רואים?</h2>
+        <p>בחירה אחת בלבד, כדי שהמפה תתאים את צורת הסימון. אין כאן חשבון חשמל ואין כאן סוללות.</p>
         <div class="optionsStack">
-          ${optionCard('גג שטוח', 'הכי נפוץ בישראל. סימון מהיר של שטח שימושי.', state.roofType === 'flat', 'roof:flat')}
-          ${optionCard('גג משופע / לא אחיד', 'כמה משטחים עם כיוונים שונים.', state.roofType === 'sloped', 'roof:sloped')}
-          ${optionCard('גג מסחרי גדול', 'שטח גדול, אזורי שירות, הצללות ומכשולים.', state.roofType === 'commercial', 'roof:commercial')}
+          ${optionCard('▣', 'גג שטוח', 'סימון מהיר של שטח שימושי.', state.roofType === 'flat', 'roof:flat')}
+          ${optionCard('◭', 'גג משופע', 'כמה משטחים וכיוונים.', state.roofType === 'sloped', 'roof:sloped')}
+          ${optionCard('▦', 'גג מסחרי', 'שטח גדול ואזורי שירות.', state.roofType === 'commercial', 'roof:commercial')}
         </div>
-        <label>חשבון חשמל חודשי ממוצע</label>
-        <input type="number" value="${state.monthlyBill}" data-field="monthlyBill" />
-        ${buttonRow('המשך לסימון הגג')}
+        ${buttonRow('המשך לסריקה')}
       </div>
-      <div class="sidePanel metricPanel">
-        <div class="metricCard"><span>Estimated roof type</span><b>${state.roofType}</b></div>
-        <div class="metricCard"><span>Monthly bill</span><b>${formatMoney(state.monthlyBill)}</b></div>
-        <div class="metricCard"><span>Calculation model</span><b>Israel PV</b></div>
+      <div class="sidePanel graphicPanel">
+        <div class="bigGraphic roofGraphic"><span></span><b>${state.roofType}</b></div>
       </div>
     </section>`;
 }
 
-function drawScreen() {
+function scanScreen() {
   const nextSurface = state.surfaces.length < surfacesPreset.length ? surfacesPreset[state.surfaces.length].name : 'All core surfaces completed';
   return `
     <section class="productGrid wideMap">
       <div class="productCard">
         ${progress()}
-        <div class="eyebrow">Roof drawing</div>
-        <h2>סימון משטחי הגג</h2>
-        <p>כל משטח שמסומן הופך לזהב, מקבל ✓, ומציג שטח, כיוון וכמות פאנלים. זה נותן תחושת התקדמות ולא “ציור טכני”.</p>
+        <div class="screenIcon">◈</div>
+        <div class="eyebrow">Step 3</div>
+        <h2>סימון הגג על המפה</h2>
+        <p>המשתמש מסמן על התמונה. שטח הגג, שטח שימושי וכמות פאנלים מחושבים אוטומטית.</p>
         ${surfaceList()}
-        <div class="nextSurface">Next surface: <b>${nextSurface}</b></div>
+        ${statPills()}
+        <div class="nextSurface">Next detected surface: <b>${nextSurface}</b></div>
         <div class="splitButtons">
           <button class="primaryBtn" data-action="addSurface">הוסף משטח</button>
           <button class="ghostBtn" data-action="removeSurface">בטל אחרון</button>
         </div>
         ${buttonRow('המשך למכשולים')}
       </div>
-      <div class="sidePanel">${mapMock('draw')}</div>
+      <div class="sidePanel">${mapMock('scan')}</div>
     </section>`;
 }
 
 function obstaclesScreen() {
   return `
-    <section class="productGrid">
+    <section class="productGrid wideMap">
       <div class="productCard">
         ${progress()}
-        <div class="eyebrow">Obstacles</div>
-        <h2>מה נמצא על הגג?</h2>
-        <p>בשלב הבא נחשב אזורים לא שמישים: דודים, מזגנים, יציאות גג, צל וקולטים קיימים.</p>
+        <div class="screenIcon">⊙</div>
+        <div class="eyebrow">Step 4</div>
+        <h2>מה צריך להוריד מהשטח?</h2>
+        <p>פעולה אחת: סימון מכשולים על הגג. הם יורדים מהשטח השימושי אוטומטית.</p>
         <div class="obstacleGrid">
-          <button class="obstacle selected">AC units</button>
-          <button class="obstacle selected">Boiler</button>
-          <button class="obstacle">Roof access</button>
-          <button class="obstacle">Shade</button>
-          <button class="obstacle">Existing solar</button>
-          <button class="obstacle">Parapet</button>
+          <button class="obstacle selected">מזגנים</button>
+          <button class="obstacle selected">דוד</button>
+          <button class="obstacle">יציאה לגג</button>
+          <button class="obstacle">צל</button>
+          <button class="obstacle">קולטים קיימים</button>
+          <button class="obstacle">מעקה</button>
         </div>
-        ${buttonRow('התחל ניתוח')}
+        ${buttonRow('חשב דוח')}
       </div>
       <div class="sidePanel">${mapMock('obstacles')}</div>
-    </section>`;
-}
-
-function analysisScreen() {
-  return `
-    <section class="analysisScreen">
-      <div class="productCard analysisCard">
-        ${progress()}
-        <div class="eyebrow">Engineering analysis</div>
-        <h2>Solatrix roof engine is working</h2>
-        <div class="analysisList">
-          ${analysisSteps.map((item, index) => `<div class="analysisStep" style="animation-delay:${index * 180}ms"><span>✓</span><b>${item}</b></div>`).join('')}
-        </div>
-        <div class="buttonRow delayedActions">
-          <button class="primaryBtn" data-action="next">הצג דוח</button>
-          <button class="ghostBtn" data-action="prev">חזרה</button>
-        </div>
-      </div>
     </section>`;
 }
 
@@ -337,25 +310,26 @@ function reportScreen() {
         ${logo()}
         <div class="eyebrow">Preliminary solar report</div>
         <h2>הגג מתאים למערכת של כ-${report.systemKw.toFixed(1)} kW</h2>
-        <p>המספרים הם הערכה ראשונית לפי שטח מסומן, כיוון, מכשולים ומודל Solatrix לשוק הישראלי.</p>
+        <p>הדוח מבוסס על שטח הגג שזוהה במפה, כיוונים, מכשולים ומודל ייצור סולארי בישראל. בלי המלצת סוללות בשלב הזה.</p>
+        <div class="scanTimeline">
+          ${scanSteps.map((item) => `<div><span>✓</span>${item}</div>`).join('')}
+        </div>
       </div>
       <div class="reportCards">
+        <div class="resultCard"><span>Roof area detected</span><b>${formatNumber(report.roofArea)} m²</b></div>
+        <div class="resultCard"><span>Usable solar area</span><b>${formatNumber(report.usableArea)} m²</b></div>
         <div class="resultCard"><span>System size</span><b>${report.systemKw.toFixed(1)} kW</b></div>
         <div class="resultCard"><span>Panels</span><b>${report.panels}</b></div>
         <div class="resultCard"><span>Annual production</span><b>${formatNumber(report.annualProduction)} kWh</b></div>
-        <div class="resultCard"><span>Annual savings</span><b>${formatMoney(report.annualSavings)}</b></div>
+        <div class="resultCard"><span>Annual income estimate</span><b>${formatMoney(report.annualRevenue)}</b></div>
         <div class="resultCard"><span>Payback</span><b>${report.payback.toFixed(1)} years</b></div>
         <div class="resultCard"><span>25-year profit</span><b>${formatMoney(report.profit25)}</b></div>
       </div>
       <div class="leadCard">
         <h3>קבלו PDF מלא ל-WhatsApp או Email</h3>
-        <div class="leadFields">
-          <input placeholder="שם מלא" />
-          <input placeholder="טלפון WhatsApp" />
-          <input placeholder="Email" />
-        </div>
+        <div class="leadFields"><input placeholder="שם מלא" /><input placeholder="טלפון WhatsApp" /><input placeholder="Email" /></div>
         <button class="primaryBtn large" data-action="sendLead">שליחת דוח ראשוני</button>
-        ${state.leadSent ? '<div class="successToast">Lead captured locally. Next step: CRM, WhatsApp and PDF integration.</div>' : ''}
+        ${state.leadSent ? '<div class="successToast">הפרטים נשמרו לדוגמה. השלב הבא: CRM, WhatsApp ו-PDF.</div>' : ''}
       </div>
     </section>`;
 }
@@ -364,9 +338,8 @@ function renderScreen() {
   if (state.step === 0) return heroScreen();
   if (state.step === 1) return addressScreen();
   if (state.step === 2) return roofScreen();
-  if (state.step === 3) return drawScreen();
+  if (state.step === 3) return scanScreen();
   if (state.step === 4) return obstaclesScreen();
-  if (state.step === 5) return analysisScreen();
   return reportScreen();
 }
 
@@ -391,8 +364,7 @@ function render() {
   root.querySelectorAll('[data-field]').forEach((node) => {
     node.addEventListener('input', () => {
       const key = node.getAttribute('data-field');
-      const value = node.type === 'number' ? Number(node.value) : node.value;
-      state[key] = value;
+      state[key] = node.value;
     });
   });
 }
