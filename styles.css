@@ -19,15 +19,9 @@ button{cursor:pointer}
 a{color:inherit}
 .siteHeader{position:sticky;top:0;z-index:10;background:rgba(255,250,241,.94);backdrop-filter:blur(14px);border-bottom:1px solid rgba(36,26,16,.08)}
 .headerInner{width:min(1080px,calc(100% - 28px));min-height:78px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:12px}
-.brand{text-decoration:none;display:inline-flex;align-items:center;min-width:0}
-.logoMark{display:flex;align-items:center;gap:12px;direction:ltr;height:54px;transform:none}
-.logoIcon{width:46px;height:46px;display:block;flex:0 0 auto;overflow:visible}
-.logoSunHalo{fill:#fff4d7;stroke:rgba(245,161,26,.42);stroke-width:2}
-.logoPanel{fill:var(--navy)}
-.logoPanelLine,.logoRay{fill:none;stroke:var(--gold);stroke-width:2.3;stroke-linecap:round;stroke-linejoin:round}
-.logoText{display:flex;flex-direction:column;justify-content:center;align-items:flex-start;transform:translateY(1px)}
-.logoText strong{display:block;font-size:25px;line-height:.92;font-weight:950;letter-spacing:-1.2px;color:#080604}
-.logoText span{display:block;margin-top:5px;font-size:9px;line-height:1;letter-spacing:4px;font-weight:900;color:var(--gold)}
+.brand{text-decoration:none;display:inline-flex;align-items:center;min-width:0;height:64px}
+.logoMark{display:flex;align-items:center;justify-content:flex-start;direction:ltr;height:64px;width:174px;overflow:hidden;transform:none}
+.logoImage{display:block;width:168px;height:auto;object-fit:contain;object-position:left center;transform:translateY(1px)}
 .headerActions{display:flex;align-items:center;gap:10px;direction:ltr}
 .headerCta{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;background:var(--green);color:white;border-radius:999px;padding:11px 17px;font-weight:950;box-shadow:0 10px 24px rgba(37,211,102,.25)}
 .menuBtn{width:44px;height:44px;border-radius:16px;border:1px solid var(--line);background:white;color:var(--navy);font-size:21px;font-weight:950;box-shadow:0 8px 20px rgba(16,24,32,.06)}
@@ -62,6 +56,6 @@ input:focus{border-color:var(--gold);box-shadow:0 0 0 5px rgba(245,161,26,.16)}
 .drawFooter{display:grid;gap:12px}.sideCount{text-align:center;background:#fff7e5;border:1px solid #f1d5a3;border-radius:18px;padding:13px;font-weight:950;color:#775000}.obstacleGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.obstacle{border:1px solid var(--line);background:#fff;border-radius:18px;padding:16px;font-size:17px;font-weight:950;color:var(--ink);display:flex;align-items:center;justify-content:center;gap:9px}.obstacle span{font-size:22px}.obstacle.selected{background:var(--navy);color:white;border-color:var(--navy)}
 .analysisCard{min-height:360px;display:grid;place-items:center;align-content:center;gap:18px}.loader{width:74px;height:74px;border-radius:50%;border:8px solid #f4dfbc;border-top-color:var(--gold);animation:spin .85s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
 .reportCard{max-width:980px}.resultsGrid{display:grid;grid-template-columns:1fr;gap:12px;margin:24px 0}.resultsGrid div{background:#fffaf2;border:1px solid var(--line);border-radius:22px;padding:18px;position:relative;overflow:hidden}.resultsGrid div:after{content:"";position:absolute;left:-24px;top:-24px;width:58px;height:58px;border-radius:50%;background:rgba(245,161,26,.14)}.resultsGrid span{display:block;color:var(--muted);font-size:14px;font-weight:900;margin-bottom:8px}.resultsGrid b{display:block;color:var(--navy);font-size:27px;font-weight:950;direction:ltr;text-align:right}.leadFields{display:grid;gap:10px;margin:18px 0}.successToast{margin-top:14px;background:#eef8f2;border:1px solid #cbe8d8;border-radius:18px;padding:13px;color:#1e7549;font-weight:950;text-align:center}
-@media(max-width:560px){.headerInner{width:calc(100% - 22px);min-height:72px}.logoMark{gap:9px;height:50px}.logoIcon{width:41px;height:41px}.logoText strong{font-size:22px}.logoText span{font-size:8px;letter-spacing:3.4px}.headerCta{padding:10px 13px;font-size:14px}.menuBtn{width:42px;height:42px}.appShell{width:calc(100% - 22px);padding-top:20px}.card{padding:22px;border-radius:28px}.heroCard{min-height:430px}.mapPanel{height:44vh;min-height:310px}.obstacleGrid{grid-template-columns:1fr}.floatingDecor span{display:none}.heroText,.subText{font-size:17px}}
+@media(max-width:560px){.headerInner{width:calc(100% - 22px);min-height:72px}.brand{height:58px}.logoMark{height:58px;width:144px}.logoImage{width:142px}.headerCta{padding:10px 13px;font-size:14px}.menuBtn{width:42px;height:42px}.appShell{width:calc(100% - 22px);padding-top:20px}.card{padding:22px;border-radius:28px}.heroCard{min-height:430px}.mapPanel{height:44vh;min-height:310px}.obstacleGrid{grid-template-columns:1fr}.floatingDecor span{display:none}.heroText,.subText{font-size:17px}}
 @media(min-width:760px){.actions,.compactActions,.leadFields{grid-template-columns:1fr 1fr}.resultsGrid{grid-template-columns:repeat(2,1fr)}}
 @media(min-width:980px){.heroGrid{grid-template-columns:1.05fr .95fr}.visualCard{display:block}.resultsGrid{grid-template-columns:repeat(3,1fr)}}
