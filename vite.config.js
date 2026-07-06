@@ -1,7 +1,26 @@
 import { defineConfig } from 'vite';
 
+function injectSiteLinkBridge() {
+  return {
+    name: 'solatrix-site-link-bridge',
+    transformIndexHtml() {
+      return [
+        {
+          tag: 'script',
+          attrs: {
+            type: 'module',
+            src: './src/siteLinkBridge.js'
+          },
+          injectTo: 'body'
+        }
+      ];
+    }
+  };
+}
+
 export default defineConfig({
   base: './',
+  plugins: [injectSiteLinkBridge()],
   resolve: {
     alias: [
       { find: './src/pdfReport.js', replacement: '/src/pdfReportHotfix.js' }
