@@ -1,5 +1,10 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: './'
+  base: './',
+  resolve: {
+    alias: [
+      { find: './src/pdfReport.js', replacement: '/src/pdfReportHotfix.js' }
+    ]
+  }
 });
