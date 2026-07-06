@@ -1,0 +1,6 @@
+{
+  "proposalMaster": "homeowner-master-v1",
+  "deployedAt": "2026-07-06T05:45:00Z",
+  "pdfBuilder": "src/pdfReport.js",
+  "notes": "Forces GitHub Pages rebuild and provides a visible deploy marker for the approved homeowner proposal master."
+}
