@@ -1,16 +1,18 @@
 import { defineConfig } from 'vite';
 
-function injectSiteLinkBridge() {
+function injectSolatrixScripts() {
   return {
-    name: 'solatrix-site-link-bridge',
+    name: 'solatrix-site-wide-scripts',
     transformIndexHtml() {
       return [
         {
           tag: 'script',
-          attrs: {
-            type: 'module',
-            src: './src/siteLinkBridge.js'
-          },
+          attrs: { type: 'module', src: './src/siteLinkBridge.js' },
+          injectTo: 'body'
+        },
+        {
+          tag: 'script',
+          attrs: { type: 'module', src: './src/globalLeadForm.js' },
           injectTo: 'body'
         }
       ];
@@ -20,7 +22,7 @@ function injectSiteLinkBridge() {
 
 export default defineConfig({
   base: './',
-  plugins: [injectSiteLinkBridge()],
+  plugins: [injectSolatrixScripts()],
   resolve: {
     alias: [
       { find: './src/pdfReport.js', replacement: '/src/pdfReportHotfix.js' }
@@ -38,7 +40,8 @@ export default defineConfig({
         business: 'business.html',
         agriculture: 'agriculture.html',
         faq: 'faq.html',
-        contact: 'contact.html'
+        contact: 'contact.html',
+        admin: 'admin.html'
       }
     }
   }
