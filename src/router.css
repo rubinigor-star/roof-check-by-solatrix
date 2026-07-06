@@ -1,11 +1,61 @@
 .mobileMenu a.active,
-.mobileMenu button.active {
+.mobileMenu button.active,
+.desktopNav a.active {
   border-color: rgba(245,161,26,.9);
   background: #fff3d6;
 }
 
 .logoImage {
   max-height: 54px;
+}
+
+.desktopNav {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  font-weight: 950;
+  color: var(--navy);
+}
+
+.desktopNav a {
+  text-decoration: none;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 10px 13px;
+  white-space: nowrap;
+}
+
+.stageWhatsapp {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.adminActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 4px 0 18px;
+}
+
+.ghostBtn.danger {
+  color: #9b2d20;
+  border-color: #f1b3aa;
+}
+
+.leadsTable tbody tr:focus,
+.leadsTable tbody tr:hover {
+  outline: 0;
+  background: #fff8e8;
+}
+
+@media (min-width: 980px) {
+  .desktopNav {
+    display: flex;
+  }
+
+  .menuBtn {
+    display: none;
+  }
 }
 
 @media (max-width: 680px) {

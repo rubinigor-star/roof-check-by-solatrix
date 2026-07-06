@@ -24,12 +24,23 @@ const newSavingsIcon = [
   '<', 'path d="M7 16h6"/', '>'
 ].join('');
 
+const leadStyles = `.leadPdfBox{margin-top:6mm;padding:5mm;border:1px solid rgba(242,138,0,.35);border-radius:14px;background:#fff9ec;display:grid;grid-template-columns:1fr 1fr;gap:3mm}.leadPdfBox b{display:block;color:var(--navy);font-size:13px}.leadPdfBox span{display:block;color:var(--muted);font-size:11px;font-weight:760;direction:ltr;text-align:right}.leadPdfDisclaimer{margin-top:4mm;color:var(--muted);font-size:10px;font-weight:760;line-height:1.4}`;
+
 export function buildFullPdfReport(args) {
+  const state = args?.state || {};
+  const leadBox = `<div class="leadPdfBox"><div><b>איש קשר</b><span>${escapeHtml(state.leadName || '—')}</span></div><div><b>טלפון</b><span>${escapeHtml(state.leadPhone || '—')}</span></div><div><b>אימייל</b><span>${escapeHtml(state.leadEmail || '—')}</span></div><div><b>מקור</b><span>Roof Check staging</span></div></div><div class="leadPdfDisclaimer">הדוח הוא הערכה ראשונית בלבד. לפני הצעה סופית נדרש סיור מקצועי, בדיקת חשמל, קונסטרוקציה ואישור חיבור.</div>`;
+
   return baseBuildFullPdfReport(args)
     .replace(oldPagePadding, newPagePadding)
     .replace(oldFooter, newFooter)
     .replace(oldFooterLine, newFooterLine)
     .replace(oldFooterItems, newFooterItems)
+    .replace('</style>', `${leadStyles}</style>`)
+    .replace('<div class="summaryStrip card">', `<div class="summaryStrip card">${leadBox}`)
     .split(oldSavingsIcon)
     .join(newSavingsIcon);
+}
+
+function escapeHtml(value = '') {
+  return String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 }
