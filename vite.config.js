@@ -34,7 +34,7 @@ export default defineConfig({
         main: 'index.html',
         privateHomes: 'private-homes.html',
         solarPrice: 'solar-price.html',
-        roofCheckLanding: 'roof-check.html',
+        roofCheckRedirect: 'roof-check.html',
         roofCheckApp: 'roof-check/index.html',
         storage: 'storage.html',
         business: 'business.html',
