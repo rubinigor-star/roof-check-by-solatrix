@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 
-const SITE_WIDE_SCRIPT_SKIP = new Set(['roof-check.html', 'roof-check/index.html']);
+const SITE_WIDE_SCRIPT_SKIP = new Set(['roof-check.html', 'roof-check/index.html', 'admin.html']);
 
 function injectSolatrixScripts() {
   return {
