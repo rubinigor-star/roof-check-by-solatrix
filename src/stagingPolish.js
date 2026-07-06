@@ -2,11 +2,12 @@ import { clearLeads, exportLeadsCsv, getLeads, saveLead, seedDemoLeads } from '.
 
 const DRAFT_KEY = 'solatrix_roof_check_lead_draft';
 const MAIN_SITE_LINKS = [
-  ['/', 'ראשי'],
-  ['/private-homes.html', 'בתים פרטיים'],
-  ['/business.html', 'עסקים'],
-  ['/storage.html', 'אגירה'],
-  ['/contact.html', 'צור קשר']
+  ['./', 'ראשי'],
+  ['./private-homes.html', 'בתים פרטיים'],
+  ['./business.html', 'עסקים'],
+  ['./storage.html', 'אגירה'],
+  ['./contact.html', 'צור קשר'],
+  ['./admin.html', 'CRM']
 ];
 
 function enhance() {
@@ -18,10 +19,10 @@ function enhance() {
 function enhanceHeader() {
   const headerInner = document.querySelector('.headerInner');
   if (!headerInner || headerInner.querySelector('.desktopNav')) return;
-  const base = location.pathname.includes('/roof-check') ? location.pathname.split('/roof-check')[0] || '' : '';
+  const base = location.pathname.includes('/roof-check') ? `${location.pathname.split('/roof-check')[0] || ''}/` : './';
   const nav = document.createElement('nav');
   nav.className = 'desktopNav';
-  nav.innerHTML = MAIN_SITE_LINKS.map(([href, label]) => `<a href="${base}${href}">${label}</a>`).join('') + '<a href="#admin" data-stage-admin>CRM</a>';
+  nav.innerHTML = MAIN_SITE_LINKS.map(([href, label]) => `<a href="${new URL(href, location.origin + base).pathname}">${label}</a>`).join('') + '<a href="#admin" data-stage-admin>CRM פנימי</a>';
   headerInner.querySelector('.brand')?.after(nav);
   nav.querySelector('[data-stage-admin]')?.addEventListener('click', (event) => {
     event.preventDefault();
@@ -41,7 +42,13 @@ function enhanceLeadForm() {
     <input placeholder="הערות / זמן נוח לשיחה" value="${escapeAttr(draft.notes || '')}" data-stage-field="notes" />
   `);
   const pdfButton = reportCard.querySelector('[data-action="generatePdf"]');
-  pdfButton?.insertAdjacentHTML('afterend', '<a class="ghostBtn stageWhatsapp" target="_blank" rel="noreferrer">שליחה ל-Solatrix ב-WhatsApp</a>');
+  pdfButton?.insertAdjacentHTML('afterend', `
+    <div class="stageReportActions">
+      <button class="ghostBtn" type="button" data-stage-open-lead>השאירו פרטים</button>
+      <a class="ghostBtn stageWhatsapp" target="_blank" rel="noreferrer">WhatsApp</a>
+    </div>
+    <p class="stageFinePrint">הדוח הוא הערכה דיגיטלית ראשונית. לפני הצעה סופית נבצע בדיקת שטח, חשמל וקונסטרוקציה.</p>
+  `);
   refreshWhatsAppLink();
   leadFields.querySelectorAll('[data-stage-field]').forEach((input) => input.addEventListener('input', () => {
     const nextDraft = readDraft();
@@ -49,6 +56,8 @@ function enhanceLeadForm() {
     writeDraft(nextDraft);
     refreshWhatsAppLink();
   }));
+  leadFields.querySelectorAll('[data-field], [data-stage-field]').forEach((input) => input.addEventListener('input', refreshWhatsAppLink));
+  reportCard.querySelector('[data-stage-open-lead]')?.addEventListener('click', () => openGlobalLeadForm());
   pdfButton?.addEventListener('click', () => {
     const draft = readDraft();
     setTimeout(() => enrichLatestLead(draft), 250);
@@ -64,12 +73,26 @@ function enhanceCrm() {
       <button class="ghostBtn" data-stage-action="seed">Demo leads</button>
       <button class="ghostBtn" data-stage-action="export">Export CSV</button>
       <button class="ghostBtn danger" data-stage-action="clear">Clear mock</button>
+      <a class="ghostBtn" href="../admin.html">CRM full page</a>
     </div>
   `);
   adminCard.querySelector('[data-stage-action="seed"]')?.addEventListener('click', () => { seedDemoLeads(); location.reload(); });
   adminCard.querySelector('[data-stage-action="clear"]')?.addEventListener('click', () => { clearLeads(); location.reload(); });
   adminCard.querySelector('[data-stage-action="export"]')?.addEventListener('click', downloadCsv);
   adminCard.querySelectorAll('.leadsTable tbody tr').forEach((row) => row.setAttribute('tabindex', '0'));
+}
+
+function openGlobalLeadForm() {
+  const draft = readDraft();
+  const name = document.querySelector('[data-field="leadName"]')?.value || '';
+  const phone = document.querySelector('[data-field="leadPhone"]')?.value || '';
+  const address = document.querySelector('[data-field="address"]')?.value || '';
+  window.openSolatrixLeadForm?.({
+    sourceType: 'roof-check',
+    sourcePage: location.pathname,
+    notes: draft.notes || '',
+    prefill: { name, phone, email: draft.email || '', cityOrAddress: address, message: draft.notes || '' }
+  });
 }
 
 function enrichLatestLead(draft) {
@@ -79,7 +102,8 @@ function enrichLatestLead(draft) {
     ...latest,
     email: draft.email || latest.email || '',
     notes: draft.notes || latest.notes || '',
-    source: latest.source || 'Roof Check staging'
+    sourceType: 'roof-check',
+    sourcePage: location.pathname
   });
 }
 
