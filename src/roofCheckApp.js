@@ -3,7 +3,15 @@ import './router.css';
 import { buildFullPdfReport } from './pdfReport.js';
 import { getLeads, saveLead, updateLeadStatus, LEAD_STATUSES } from './leadsStore.js';
 
-const BASE_PATH = '/roof-check';
+function resolveBasePath() {
+  const marker = '/roof-check';
+  const pathname = window.location.pathname || marker;
+  const index = pathname.indexOf(marker);
+  return index >= 0 ? pathname.slice(0, index + marker.length) : marker;
+}
+
+const BASE_PATH = resolveBasePath();
+const SITE_ROOT = `${BASE_PATH.replace(/\/roof-check$/, '') || ''}/`;
 const CONFIG = {
   productionPerKw: 1650,
   buyRate: 0.64,
@@ -27,7 +35,6 @@ const ROUTES = [
 ];
 const byStep = new Map(ROUTES.map((route) => [route.step, route]));
 const byPath = new Map(ROUTES.map((route) => [pathForSlug(route.slug), route]));
-
 const shapePresets = [
   { points: '17,58 77,42 86,78 24,88', area: 74, orientation: 'South', factor: 1 },
   { points: '14,18 48,10 52,36 16,46', area: 36, orientation: 'East', factor: 0.88 },
@@ -35,7 +42,6 @@ const shapePresets = [
   { points: '28,42 55,35 63,58 35,66', area: 29, orientation: 'South-East', factor: 0.94 },
   { points: '48,62 82,56 86,77 52,84', area: 31, orientation: 'South-West', factor: 0.9 }
 ];
-
 const state = {
   step: routeFromLocation().step,
   address: '',
@@ -80,7 +86,6 @@ function setStep(step, options = {}) {
   render();
   if (state.step === 5) state.analysisTimer = setTimeout(() => setStep(6), 1200);
 }
-
 function formatNumber(value) { return Math.round(value).toLocaleString('he-IL'); }
 function formatMoney(value) { return '₪' + formatNumber(value); }
 function createSurface(index) { return { id: index + 1, name: `Side ${index + 1}`, ...shapePresets[index % shapePresets.length] }; }
@@ -117,12 +122,11 @@ function saveCurrentLead(report = calculateReport()) {
     status: 'חדש'
   });
 }
-
 function logo() { return `<div class="logoMark" aria-label="Solatrix Energy"><img class="logoImage" src="${LOGO_SRC}" alt="Solatrix Energy" loading="eager" /></div>`; }
 function routeLink(step) { return `href="${pathForStep(step)}" data-action="step:${step}"`; }
 function header() {
   const menuItems = [0, 1, 2, 3, 4, 6].map((step) => `<a ${routeLink(step)} class="${state.step === step ? 'active' : ''}">${byStep.get(step).label}</a>`).join('');
-  return `<header class="siteHeader ${state.menuOpen ? 'menuOpen' : ''}"><div class="headerInner"><a class="brand" href="/">${logo()}</a><div class="headerActions"><a class="headerCta" href="https://wa.me/${CONFIG.defaultPhone}" target="_blank" rel="noreferrer">WhatsApp</a><button class="menuBtn" data-action="toggleMenu" aria-label="Menu">${state.menuOpen ? '×' : '☰'}</button></div></div><nav class="mobileMenu">${menuItems}<a href="/">לאתר הראשי</a><a href="https://wa.me/${CONFIG.defaultPhone}" target="_blank" rel="noreferrer">WhatsApp</a></nav></header>`;
+  return `<header class="siteHeader ${state.menuOpen ? 'menuOpen' : ''}"><div class="headerInner"><a class="brand" href="${SITE_ROOT}">${logo()}</a><div class="headerActions"><a class="headerCta" href="https://wa.me/${CONFIG.defaultPhone}" target="_blank" rel="noreferrer">WhatsApp</a><button class="menuBtn" data-action="toggleMenu" aria-label="Menu">${state.menuOpen ? '×' : '☰'}</button></div></div><nav class="mobileMenu">${menuItems}<a href="${SITE_ROOT}">לאתר הראשי</a><a href="https://wa.me/${CONFIG.defaultPhone}" target="_blank" rel="noreferrer">WhatsApp</a></nav></header>`;
 }
 function progress() { return state.step === 0 || state.step === 7 ? '' : `<div class="progressDots">${[1,2,3,4,5,6].map((step) => `<span class="${step <= state.step ? 'done' : ''}"></span>`).join('')}</div>`; }
 function cardDecor() { return `<div class="cardDecor" aria-hidden="true"><i></i><i></i><i></i></div>`; }
@@ -133,7 +137,6 @@ function mapMock(interactive = false) {
   const pins = state.obstacles.map((_, index) => { const c = [[42,36], [66,56], [72,28], [35,64], [58,24]][index % 5]; return `<circle cx="${c[0]}" cy="${c[1]}" r="3.8"></circle>`; }).join('');
   return `<div class="mapPanel ${interactive ? 'interactiveMap' : ''}" ${interactive ? 'data-action="markRoof"' : ''}><div class="mapBadge">${state.surfaces.length ? 'Roof marked' : 'Tap to mark'}</div><div class="scanPulse"></div><svg class="roofCanvas" viewBox="0 0 100 100"><defs><pattern id="grid" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M 8 0 L 0 0 0 8" fill="none" /></pattern></defs><rect x="0" y="0" width="100" height="100" class="mapBase"></rect><rect x="0" y="0" width="100" height="100" fill="url(#grid)" class="mapGrid"></rect><path class="sunRay" d="M5 15 L35 42 M4 38 L34 52 M12 60 L42 62"></path><path class="building" d="M12 14 L86 9 L92 82 L18 90 Z"></path>${surfaceShapes}<g class="obstaclePins">${pins}</g></svg></div>`;
 }
-
 function heroScreen() { return `<section class="screen heroScreen">${floatingDecor()}<div class="heroGrid"><div class="card centerCard heroCard">${cardDecor()}<div class="eyebrow">Roof Check by Solatrix</div><h1>בדיקת גג סולארית</h1><p class="heroText">תוך דקה מקבלים הערכה ראשונית: שטח שימושי, כמות פאנלים, ייצור שנתי ורווח צפוי.</p><div class="featureChips"><span>☀️ חישוב מהיר</span><span>📍 לפי כתובת</span><span>📄 דוח PDF מלא</span></div><button class="primaryBtn large" data-action="next">התחילו בדיקת גג</button></div><div class="visualCard"><div class="orbit orbitOne"></div><div class="orbit orbitTwo"></div><div class="miniRoof"><div class="roofTop"></div><div class="panelRows"><span></span><span></span><span></span><span></span></div></div><div class="visualStats"><b>PDF</b><span>דוח מלא</span></div><div class="visualStats second"><b>☀️</b><span>חישוב מהיר</span></div></div></div></section>`; }
 function addressScreen() { return `<section class="screen">${floatingDecor()}<div class="card focusCard">${cardDecor()}${progress()}<div class="screenIcon">📍</div><h2>כתובת וחשבון חשמל</h2><p class="subText">החשבון החודשי עוזר לחשב כמה מהייצור יחסוך קנייה ב־₪${CONFIG.buyRate} וכמה יימכר ב־₪${CONFIG.sellRate}.</p><div class="fieldGroup"><label>כתובת הגג</label><input value="${state.address}" placeholder="לדוגמה: החרמון 10, חיפה" data-field="address" /></div><div class="fieldGroup"><label>חשבון חשמל חודשי משוער</label><input value="${state.monthlyBill}" inputmode="numeric" data-field="monthlyBill" /></div>${actions('מצא את הגג')}</div></section>`; }
 function roofScreen() { return `<section class="screen">${floatingDecor()}<div class="card focusCard">${cardDecor()}${progress()}<div class="screenIcon">🏠</div><h2>איזה סוג גג?</h2><div class="roofOptions"><button class="roofOption ${state.roofType === 'flat' ? 'selected' : ''}" data-action="roof:flat"><span>▰</span><b>גג שטוח</b><small>הכי פשוט לסימון מהיר</small></button><button class="roofOption ${state.roofType === 'sloped' ? 'selected' : ''}" data-action="roof:sloped"><span>◭</span><b>גג לא אחיד / כמה צדדים</b><small>נסמן כל צד בנפרד</small></button><button class="roofOption ${state.roofType === 'commercial' ? 'selected' : ''}" data-action="roof:commercial"><span>▦</span><b>גג מסחרי</b><small>שטח גדול, פוטנציאל גבוה</small></button></div>${actions('המשך לסימון')}</div></section>`; }
@@ -148,7 +151,6 @@ function adminScreen() {
   const cards = [['סה״כ לידים', leads.length], ['חדשים', leads.filter((lead) => lead.status === 'חדש').length], ['סיורים', leads.filter((lead) => lead.status === 'נקבע סיור').length], ['עסקאות', leads.filter((lead) => lead.status === 'עסקה').length]];
   return `<section class="screen adminScreen"><div class="card adminCard">${cardDecor()}<div class="eyebrow">Solatrix CRM</div><h2>לוח בקרה לידים</h2><div class="adminStats">${cards.map(([label,value]) => `<div><span>${label}</span><b>${value}</b></div>`).join('')}</div><div class="adminLayout"><div class="leadsTable"><table><thead><tr><th>שם</th><th>טלפון</th><th>כתובת</th><th>מערכת</th><th>סטטוס</th></tr></thead><tbody>${leads.length ? leads.map((lead) => `<tr data-action="selectLead:${lead.id}"><td>${lead.name}</td><td>${lead.phone || '-'}</td><td>${lead.address || '-'}</td><td>${Number(lead.systemKw || 0).toFixed(1)} kW</td><td>${lead.status}</td></tr>`).join('') : '<tr><td colspan="5">אין עדיין לידים. צור דוח PDF כדי לשמור ליד ראשון.</td></tr>'}</tbody></table></div>${selected ? `<div class="leadDetail"><h3>${selected.name}</h3><p>${selected.address || 'אין כתובת'}<br/>${selected.phone || 'אין טלפון'}</p><div class="resultsGrid"><div><span>מערכת</span><b>${Number(selected.systemKw || 0).toFixed(1)} kW</b></div><div><span>חיסכון שנתי</span><b>${formatMoney(selected.annualSavings || 0)}</b></div><div><span>החזר</span><b>${Number(selected.payback || 0).toFixed(1)} שנים</b></div></div><label class="fieldGroup"><span>סטטוס</span><select data-lead-status="${selected.id}">${LEAD_STATUSES.map((status) => `<option ${status === selected.status ? 'selected' : ''}>${status}</option>`).join('')}</select></label>${mapMock(false)}</div>` : ''}</div></div></section>`;
 }
-
 function generatePdfReport() {
   const report = calculateReport();
   saveCurrentLead(report);
