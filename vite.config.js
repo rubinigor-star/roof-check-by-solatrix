@@ -1,9 +1,13 @@
 import { defineConfig } from 'vite';
 
+const SITE_WIDE_SCRIPT_SKIP = new Set(['roof-check.html', 'roof-check/index.html']);
+
 function injectSolatrixScripts() {
   return {
     name: 'solatrix-site-wide-scripts',
-    transformIndexHtml() {
+    transformIndexHtml(html, context) {
+      const filename = String(context?.filename || '').replace(/\\/g, '/');
+      if ([...SITE_WIDE_SCRIPT_SKIP].some((page) => filename.endsWith(page))) return [];
       return [
         {
           tag: 'script',
