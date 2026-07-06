@@ -27,3 +27,6 @@ Warm, clear, practical, confidence-building.
 
 ## Implementation note
 The current `src/pdfReport.js` is a code adaptation of this master. It recreates the visual language with HTML/CSS/SVG so values remain dynamic and the final PDF does not contain AI-generated Hebrew text artifacts.
+
+## Deployment marker
+`homeowner-master-v1` was pushed to `main` after the PR merge to force a fresh GitHub Pages deployment and make it clear that the live site should use the updated PDF builder, not an older cached deployment.
