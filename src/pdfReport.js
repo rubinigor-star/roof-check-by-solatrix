@@ -1,130 +1,385 @@
 export function buildFullPdfReport({ report, state, config, logoSrc, formatNumber, formatMoney }) {
   const safeState = state || {};
   const safeReport = normalizeReport(report || {});
-  const customer = escapeHtml(safeState.leadName || 'לקוח Solatrix');
-  const address = escapeHtml(safeState.address || 'כתובת הנכס תופיע כאן');
-  const phone = escapeHtml(safeState.leadPhone || '');
-  const defaultPhone = escapeHtml(config?.defaultPhone || '972547299727');
-  const cleanLogoSrc = escapeAttribute(logoSrc || '');
-  const whatsappUrl = `https://wa.me/${digitsOnly(defaultPhone)}`;
+  const number = formatNumber || ((value) => Math.round(Number(value) || 0).toLocaleString('he-IL'));
+  const money = formatMoney || ((value) => `₪${number(value)}`);
+  const customerName = safeState.leadName || 'משפחת כהן';
+  const address = safeState.address || 'רחוב הגפן 12, חיפה';
+  const customerPhone = safeState.leadPhone || '';
+  const defaultPhone = digitsOnly(config?.defaultPhone || '972547299727');
+  const whatsappUrl = `https://wa.me/${defaultPhone}`;
+  const logo = logoSrc
+    ? `<img src="${escapeAttribute(logoSrc)}" alt="Solatrix Energy" />`
+    : '<strong>Solatrix</strong><small>ENERGY</small>';
+
   const score = solarScore(safeReport, safeState);
   const confidence = confidenceScore(safeReport, safeState);
-  const monthData = monthlyProduction(safeReport);
-  const monthMax = Math.max(...monthData.map((m) => m.value), 1);
-  const roofSvg = roofDrawing(safeState, score);
-  const selfWidth = Math.max(8, Math.min(92, safeReport.selfUseShare || 0));
-  const exportWidth = Math.max(8, 100 - selfWidth);
-  const surfaces = Array.isArray(safeState.surfaces) ? safeState.surfaces : [];
-  const obstacleLabels = obstacleNames(safeState.obstacles || []);
-  const bestRoofSide = surfaces.length ? surfaces.reduce((best, surface) => Number(surface.area || 0) > Number(best.area || 0) ? surface : best, surfaces[0]) : null;
-  const recommended = investmentOption('מומלץ', 1, safeReport, config, formatMoney);
-  const conservative = investmentOption('מדויק', 0.82, safeReport, config, formatMoney);
-  const premium = investmentOption('פרימיום', 1.18, safeReport, config, formatMoney);
-  const optionsHtml = [conservative, recommended, premium].map((option) => investmentCard(option)).join('');
-  const monthlyBars = monthData.map((m) => `<div class="barMonth"><i style="height:${Math.max(14, m.value / monthMax * 100)}%"></i><b>${m.month}</b><span>${formatNumber(Math.round(m.value))}</span></div>`).join('');
-  const cumulative25 = projectionValue(25, safeReport, config);
-  const cumulative10 = projectionValue(10, safeReport, config);
-  const paybackWidth = Math.max(12, Math.min(96, 100 - Number(safeReport.payback || 0) * 10));
+  const monthly = monthlyProduction(safeReport);
+  const monthMax = Math.max(...monthly.map((m) => m.value), 1);
+  const selfWidth = Math.max(8, Math.min(92, safeReport.selfUseShare));
+  const exportWidth = 100 - selfWidth;
   const annualYield = safeReport.cost ? (safeReport.annualSavings / safeReport.cost * 100) : 0;
-  const roofSummary = [
-    { label: 'שטח גג מסומן', value: `${formatNumber(safeReport.roofArea)} מ״ר` },
-    { label: 'שטח שימושי', value: `${formatNumber(safeReport.usableArea)} מ״ר` },
-    { label: 'כיוון מוביל', value: bestRoofSide?.orientation || 'דרום / דרום-מערב' },
-    { label: 'מכשולים', value: obstacleLabels || 'ללא חסמים מהותיים' },
-  ].map((item) => `<div class="miniMetric"><span>${item.label}</span><b>${item.value}</b></div>`).join('');
+  const cumulative10 = projectionValue(10, safeReport, config);
+  const cumulative25 = projectionValue(25, safeReport, config);
+  const paybackPercent = Math.max(10, Math.min(92, 100 - safeReport.payback * 9));
+  const obstacles = obstacleNames(safeState.obstacles || []);
+  const mainDirection = mainRoofDirection(safeState);
+  const options = [
+    buildPlan('בסיס', 0.74, safeReport, money),
+    buildPlan('מאוזן', 1, safeReport, money, true),
+    buildPlan('מקסימום', 1.22, safeReport, money),
+  ];
+
+  const monthlyBars = monthly.map((m) => `
+    <div class="month">
+      <i style="height:${Math.max(12, (m.value / monthMax) * 100)}%"></i>
+      <span>${m.month}</span>
+    </div>`).join('');
+
+  const summaryMetrics = [
+    ['גודל מערכת מומלץ', `${safeReport.systemKw.toFixed(1)} kW`, iconPanel()],
+    ['ייצור שנתי משוער', `${number(safeReport.annualProduction)} kWh`, iconSun()],
+    ['חיסכון שנתי צפוי', money(safeReport.annualSavings), iconPiggy()],
+    ['שטח גג שימושי', `${number(safeReport.usableArea)} מ״ר`, iconHome()],
+    ['החזר השקעה משוער', `${safeReport.payback.toFixed(1)} שנים`, iconCycle()],
+    ['רווח ב-25 שנה', money(safeReport.profit25), iconGrowth()],
+  ].map(([label, value, icon]) => metricCard(label, value, icon)).join('');
+
+  const roofMetrics = [
+    ['שטח גג כולל', `${number(safeReport.roofArea)} מ״ר`, iconPanel()],
+    ['שטח מתאים להתקנה', `${number(safeReport.usableArea)} מ״ר`, iconSunPanel()],
+    ['כיוון עיקרי', mainDirection, iconCompass()],
+    ['מכשולים על הגג', obstacles || 'לא סומנו חסמים', iconObstacle()],
+  ].map(([label, value, icon]) => sideMetric(label, value, icon)).join('');
+
+  const systemFeatures = [
+    ['פאנלים סולאריים', `${safeReport.panels} פאנלים איכותיים`, 'הספק גבוה ונראות נקייה על הגג'],
+    ['ממיר חכם', 'ממיר מותאם לגודל המערכת', 'ניהול יעיל של הייצור לאורך היום'],
+    ['הכנה לסוללה', 'אפשרות להרחבה עתידית', 'שמירה על גמישות לבית ולצריכה'],
+    ['אחריות וליווי', 'תהליך מסודר עד חיבור', 'שירות אישי ובדיקות לפני התקנה'],
+  ].map(([title, value, text]) => featureCard(title, value, text)).join('');
+
+  const trustCards = [
+    ['בדיקה מקצועית לבית', 'אנחנו בודקים את הגג, החשמל והצריכה כדי להבין מה באמת נכון עבורכם.', iconSearchHome()],
+    ['תכנון שמתאים למשפחה', 'לא מערכת גדולה מדי ולא קטנה מדי — פתרון שמתאים לחשבון החשמל ולבית שלכם.', iconDesign()],
+    ['ליווי עד ההפעלה', 'מהשיחה הראשונה ועד מערכת פעילה, כולל הצעה סופית, תיאום והתקנה.', iconCheck()],
+    ['שקיפות מלאה', 'מספרים ברורים, מחירים מובנים ותהליך שקל להבין לפני שמחליטים.', iconShield()],
+  ].map(([title, text, icon]) => trustCard(title, text, icon)).join('');
+
+  const timeline = [
+    ['1', 'שיחה קצרה', 'מבינים את הצריכה והכתובת'],
+    ['2', 'בדיקת גג', 'בודקים שטח, כיוון ומכשולים'],
+    ['3', 'הצעה סופית', 'מקבלים מחיר ותכנון מדויקים'],
+    ['4', 'התקנה וחיבור', 'מערכת פעילה ומעקב שוטף'],
+  ].map(([n, title, text]) => timelineStep(n, title, text)).join('');
+
+  const plans = options.map(planCard).join('');
 
   return `<!doctype html>
 <html lang="he" dir="rtl">
 <head>
 <meta charset="utf-8" />
-<title>Solatrix Premium Solar Proposal</title>
+<title>Solatrix Energy - הצעה סולארית לבית</title>
 <style>
 @page{size:A4;margin:0}
 *{box-sizing:border-box}
-:root{--navy:#071b2f;--navy2:#0d2f52;--navy3:#123c63;--gold:#f5a11a;--gold2:#ffd36a;--cream:#fbf6ec;--paper:#fffdf8;--ink:#0d1b2a;--muted:#6f7b87;--line:#eadfcd;--green:#1f9d6a;--red:#d15f45}
-html,body{margin:0;background:#efe8d8;color:var(--ink);font-family:Assistant,"Noto Sans Hebrew",Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-body{font-size:14px}.page{width:210mm;height:297mm;position:relative;overflow:hidden;background:var(--paper);page-break-after:always;padding:15mm}.page::after{content:"";position:absolute;inset:auto 15mm 9mm 15mm;border-top:1px solid rgba(7,27,47,.12)}
-.pageNo{position:absolute;bottom:6mm;left:15mm;color:#8a929a;font-size:10px;font-weight:800}.footerBrand{position:absolute;bottom:6mm;right:15mm;color:#7c8791;font-size:10px;font-weight:900;letter-spacing:.02em}.watermark{position:absolute;left:-22mm;bottom:26mm;font-size:78mm;font-weight:950;color:rgba(7,27,47,.028);letter-spacing:-.08em;line-height:.8;transform:rotate(-6deg)}
-.logo{display:flex;align-items:center;gap:8px}.logo img{max-width:148px;max-height:44px;object-fit:contain;background:#fff;border-radius:16px;padding:7px 12px;box-shadow:0 16px 35px rgba(0,0,0,.14)}.logoText{font-weight:950;color:white;font-size:22px;letter-spacing:.04em}.eyebrow{display:inline-flex;align-items:center;gap:8px;background:rgba(245,161,26,.14);color:var(--gold);border:1px solid rgba(245,161,26,.32);border-radius:999px;padding:7px 12px;font-size:11px;font-weight:950;letter-spacing:.08em;text-transform:uppercase}.title{font-size:34px;line-height:1.03;margin:0;color:var(--navy);font-weight:950;letter-spacing:-.04em}.sub{font-size:16px;line-height:1.5;color:#5f6b76;font-weight:760;margin:6mm 0 0}.sectionHead{display:flex;align-items:flex-start;justify-content:space-between;gap:12mm;margin-bottom:9mm}.sectionKicker{color:var(--gold);font-weight:950;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:2mm}.sectionNumber{font-size:14px;color:var(--navy);font-weight:950;border:1px solid var(--line);border-radius:999px;padding:8px 12px;background:#fff9ef;white-space:nowrap}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:5mm}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:4mm}.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:3.5mm}.card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:6mm;box-shadow:0 18px 45px rgba(13,27,42,.08)}.darkCard{background:linear-gradient(145deg,var(--navy),var(--navy3));color:#fff;border:1px solid rgba(255,255,255,.14);box-shadow:0 22px 55px rgba(7,27,47,.28)}.metric{min-height:31mm}.metric span{display:block;color:#697887;font-size:11px;font-weight:900;margin-bottom:3mm}.metric b{display:block;color:var(--navy);font-size:24px;line-height:1.05;font-weight:950;direction:ltr;text-align:right}.metric small{display:block;color:#7c8791;margin-top:3mm;font-size:10px;font-weight:800}.darkCard .metric span,.darkCard span{color:#c7d2df}.darkCard .metric b,.darkCard b{color:#fff}.goldText{color:var(--gold)!important}.ltr{direction:ltr;text-align:right}.button{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;padding:11px 20px;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#111;font-weight:950;text-decoration:none;box-shadow:0 18px 32px rgba(245,161,26,.28)}
-.cover{padding:0;background:radial-gradient(circle at 20% 18%,rgba(255,211,106,.35),transparent 26%),linear-gradient(135deg,#061729 0%,#0b2949 49%,#123f67 100%);color:#fff}.coverTop{position:absolute;top:14mm;right:16mm;left:16mm;display:flex;align-items:center;justify-content:space-between;z-index:2}.coverHero{position:absolute;inset:0}.coverGlow{position:absolute;left:-20mm;top:20mm;width:135mm;height:135mm;border-radius:50%;background:radial-gradient(circle,rgba(245,161,26,.42),transparent 64%);filter:blur(4px)}.coverPattern{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.055) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.055) 1px,transparent 1px);background-size:14mm 14mm;mask-image:linear-gradient(to bottom,#000,transparent 78%)}.coverContent{position:absolute;right:16mm;left:16mm;top:52mm;z-index:2}.cover h1{font-size:50px;line-height:.96;margin:7mm 0 6mm;font-weight:950;letter-spacing:-.055em;max-width:128mm}.coverLead{font-size:21px;line-height:1.45;color:#e9f1f8;max-width:123mm;font-weight:760}.coverClient{display:grid;grid-template-columns:1.1fr .9fr;gap:5mm;margin-top:12mm;max-width:142mm}.coverClient .box{border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.10);border-radius:22px;padding:5mm;backdrop-filter:blur(8px)}.coverClient small{display:block;color:#b9c7d6;font-weight:900;margin-bottom:2mm}.coverClient b{font-size:20px}.coverScore{position:absolute;left:16mm;bottom:20mm;width:64mm;height:64mm;border-radius:50%;background:conic-gradient(var(--gold) ${score.score * 3.6}deg,rgba(255,255,255,.18) 0);display:grid;place-items:center;box-shadow:0 24px 80px rgba(245,161,26,.22)}.coverScoreInner{width:51mm;height:51mm;border-radius:50%;background:#071b2f;display:grid;place-items:center;text-align:center;border:1px solid rgba(255,255,255,.12)}.coverScoreInner strong{font-size:34px;line-height:1;font-weight:950;color:#fff}.coverScoreInner span{font-size:11px;color:#c7d2df;font-weight:950}.solarPlane{position:absolute;left:16mm;right:16mm;bottom:91mm;height:42mm;border-radius:28px;background:linear-gradient(120deg,rgba(255,255,255,.13),rgba(255,255,255,.04));border:1px solid rgba(255,255,255,.16);overflow:hidden}.solarPlane svg{width:100%;height:100%;display:block}.cover .footerBrand,.cover .pageNo{color:#b8c7d6;border-color:rgba(255,255,255,.12)}
-.heroStrip{height:46mm;border-radius:24px;background:radial-gradient(circle at 12% 50%,rgba(255,211,106,.28),transparent 32%),linear-gradient(135deg,var(--navy),var(--navy3));margin-bottom:7mm;position:relative;overflow:hidden;color:#fff;padding:7mm}.heroStrip::after{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.06) 1px,transparent 1px);background-size:10mm 10mm}.heroStrip h2{position:relative;z-index:2;font-size:30px;line-height:1.05;margin:3mm 0 2mm;font-weight:950}.heroStrip p{position:relative;z-index:2;color:#dce8f2;font-size:15px;line-height:1.45;max-width:130mm}.summaryNarrative{display:grid;grid-template-columns:1fr 55mm;gap:5mm;margin-top:6mm}.decisionCard{background:#fff9ef;border:1px solid #f0d9ae;border-radius:22px;padding:6mm}.decisionCard h3{margin:0 0 3mm;color:var(--navy);font-size:20px}.decisionCard p{margin:0;color:#66727e;font-size:13px;line-height:1.55;font-weight:760}.confidence{height:100%;display:flex;flex-direction:column;justify-content:space-between}.scoreBar{height:9px;background:#e7edf2;border-radius:99px;overflow:hidden}.scoreBar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--gold),var(--gold2));width:${confidence}%}.confidence b{font-size:36px;line-height:1;color:var(--navy)}
-.roofStage{display:grid;grid-template-columns:1.1fr .9fr;gap:6mm;align-items:stretch}.roofVisual{background:linear-gradient(145deg,#061729,#123c63);border-radius:30px;padding:5mm;min-height:152mm;position:relative;overflow:hidden;box-shadow:0 24px 70px rgba(7,27,47,.24)}.roofVisual::before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.06) 1px,transparent 1px);background-size:9mm 9mm}.roofVisual svg{position:relative;z-index:2;width:100%;height:136mm;display:block}.roofTag{position:absolute;top:6mm;right:6mm;z-index:3;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);color:white;border-radius:999px;padding:7px 11px;font-size:11px;font-weight:950}.north{position:absolute;top:6mm;left:6mm;z-index:3;color:#ffd36a;border:1px solid rgba(255,211,106,.35);border-radius:999px;padding:7px 10px;font-weight:950}.miniMetrics{display:grid;grid-template-columns:1fr 1fr;gap:3.5mm}.miniMetric{background:#fff;border:1px solid var(--line);border-radius:16px;padding:4mm;min-height:23mm}.miniMetric span{display:block;font-size:10px;font-weight:900;color:#71808e;margin-bottom:2mm}.miniMetric b{display:block;color:var(--navy);font-size:15px;line-height:1.15}.diagnosis{margin-top:5mm}.diagnosis h3{margin:0 0 3mm;color:var(--navy);font-size:21px}.diagnosis ul{margin:0;padding:0;list-style:none;display:grid;gap:2.5mm}.diagnosis li{display:flex;gap:3mm;align-items:flex-start;color:#5f6b76;font-size:12.5px;line-height:1.5;font-weight:760}.diagnosis li i{width:8px;height:8px;border-radius:50%;background:var(--gold);margin-top:5px;flex:none}
-.systemLayout{display:grid;grid-template-columns:.92fr 1.08fr;gap:6mm;align-items:stretch}.systemHero{border-radius:28px;background:linear-gradient(145deg,var(--navy),var(--navy3));padding:7mm;color:#fff;position:relative;overflow:hidden;min-height:160mm}.systemHero::after{content:"";position:absolute;width:80mm;height:80mm;border-radius:50%;left:-23mm;bottom:-22mm;background:radial-gradient(circle,rgba(245,161,26,.32),transparent 66%)}.systemHero h3{font-size:30px;margin:0 0 5mm;line-height:1.05}.systemHero .big{font-size:58px;line-height:.9;font-weight:950;color:#ffd36a}.systemHero p{font-size:14px;line-height:1.55;color:#d7e3ed}.specs{display:grid;gap:3.5mm}.spec{display:grid;grid-template-columns:34px 1fr;gap:4mm;align-items:center;background:#fff;border:1px solid var(--line);border-radius:18px;padding:4mm}.spec svg{width:28px;height:28px;color:var(--gold)}.spec span{display:block;color:#6c7885;font-size:11px;font-weight:900}.spec b{display:block;color:var(--navy);font-size:19px}.flow{margin-top:5mm;background:#fff9ef;border:1px solid #efdab0;border-radius:20px;padding:5mm}.flowLine{height:12px;border-radius:999px;background:linear-gradient(90deg,var(--gold) 0 ${selfWidth}%,var(--navy) ${selfWidth}% 100%);margin:4mm 0}.flowLegend{display:flex;justify-content:space-between;color:#5f6b76;font-size:11px;font-weight:900}.financeHero{display:grid;grid-template-columns:1fr 1fr;gap:5mm}.valueCard{min-height:54mm;padding:7mm;border-radius:24px}.valueCard strong{display:block;font-size:38px;line-height:1;font-weight:950;color:var(--navy);direction:ltr;text-align:right}.valueCard span{display:block;color:#6e7b87;font-weight:900;margin-bottom:4mm}.valueCard p{margin:4mm 0 0;color:#6e7b87;line-height:1.45;font-size:12.5px;font-weight:760}.waterfall{margin-top:7mm;background:linear-gradient(180deg,#fff,#fff9ef);border:1px solid var(--line);border-radius:24px;padding:6mm;height:91mm;position:relative}.waterfall h3{margin:0 0 6mm;font-size:18px;color:var(--navy)}.axis{position:absolute;right:9mm;left:9mm;bottom:17mm;border-top:1px solid #d9e0e6}.wfBars{position:absolute;right:12mm;left:12mm;bottom:18mm;top:27mm;display:grid;grid-template-columns:repeat(4,1fr);gap:9mm;align-items:end}.wfBar{display:flex;flex-direction:column;align-items:center;justify-content:end;gap:3mm}.wfBar i{display:block;width:100%;max-width:30mm;border-radius:14px 14px 4px 4px;background:linear-gradient(180deg,var(--gold2),var(--gold));box-shadow:0 12px 22px rgba(245,161,26,.24)}.wfBar.neg i{background:linear-gradient(180deg,#ffb4a3,#d15f45)}.wfBar b{font-size:12px;color:var(--navy);direction:ltr}.wfBar span{font-size:10px;color:#687583;font-weight:900}.paybackLine{margin-top:6mm}.paybackTrack{height:14px;background:#e9eef3;border-radius:99px;overflow:hidden}.paybackTrack i{height:100%;display:block;width:${paybackWidth}%;background:linear-gradient(90deg,var(--gold),var(--gold2));border-radius:99px}.analyticsGrid{display:grid;grid-template-columns:1.15fr .85fr;gap:5mm;align-items:stretch}.monthChart{height:119mm;background:#fff;border:1px solid var(--line);border-radius:24px;padding:6mm 5mm 8mm}.monthChart h3{margin:0 0 5mm;color:var(--navy);font-size:18px}.months{height:92mm;display:grid;grid-template-columns:repeat(12,1fr);gap:2.5mm;align-items:end}.barMonth{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:1.7mm}.barMonth i{display:block;width:100%;border-radius:99px 99px 4px 4px;background:linear-gradient(180deg,var(--gold2),var(--gold));min-height:8mm}.barMonth b{font-size:9px;color:var(--navy);font-weight:950}.barMonth span{font-size:8px;color:#6e7b87;font-weight:800;direction:ltr}.energySplit{display:grid;gap:4mm}.donut{width:54mm;height:54mm;border-radius:50%;background:conic-gradient(var(--gold) ${selfWidth * 3.6}deg,var(--navy) 0);display:grid;place-items:center;margin:2mm auto 5mm;box-shadow:0 22px 42px rgba(13,27,42,.12)}.donut::before{content:"";width:38mm;height:38mm;background:#fff;border-radius:50%}.splitLegend{display:grid;gap:2mm}.splitLegend div{display:flex;justify-content:space-between;border-bottom:1px solid #edf1f5;padding-bottom:2mm;font-size:12px;font-weight:900;color:#63707d}.investmentCards{display:grid;grid-template-columns:repeat(3,1fr);gap:4mm;margin-top:7mm}.plan{background:#fff;border:1px solid var(--line);border-radius:24px;padding:5mm;min-height:132mm;position:relative;overflow:hidden}.plan.recommended{background:linear-gradient(145deg,#071b2f,#123c63);color:#fff;border-color:rgba(255,211,106,.55);box-shadow:0 28px 70px rgba(7,27,47,.25);transform:translateY(-3mm)}.plan .badge{display:inline-flex;background:#fff5df;color:var(--navy);border-radius:999px;padding:6px 9px;font-size:10px;font-weight:950;margin-bottom:5mm}.plan.recommended .badge{background:var(--gold);color:#111}.plan h3{font-size:22px;margin:0 0 5mm;color:var(--navy)}.plan.recommended h3{color:#fff}.plan strong{display:block;font-size:32px;color:var(--gold);direction:ltr;text-align:right;margin-bottom:3mm}.plan ul{list-style:none;padding:0;margin:5mm 0 0;display:grid;gap:3mm}.plan li{font-size:12px;color:#687583;font-weight:800;line-height:1.4}.plan.recommended li{color:#d8e3ed}.plan li::before{content:"";display:inline-block;width:7px;height:7px;background:var(--gold);border-radius:50%;margin-left:7px}.trustGrid{display:grid;grid-template-columns:1fr 1fr;gap:5mm}.trustItem{background:#fff;border:1px solid var(--line);border-radius:20px;padding:5mm;display:grid;grid-template-columns:30px 1fr;gap:3mm;align-items:start}.trustItem svg{width:26px;height:26px;color:var(--gold)}.trustItem b{display:block;color:var(--navy);font-size:16px;margin-bottom:2mm}.trustItem span{display:block;color:#64717d;font-size:12px;line-height:1.45;font-weight:760}.timeline{margin-top:6mm;display:grid;grid-template-columns:repeat(4,1fr);gap:3mm}.timeStep{background:#fff9ef;border:1px solid #efdab0;border-radius:18px;padding:4mm}.timeStep small{display:block;color:var(--gold);font-size:10px;font-weight:950;margin-bottom:2mm}.timeStep b{font-size:15px;color:var(--navy)}.ctaPanel{margin-top:7mm;background:linear-gradient(145deg,var(--navy),var(--navy3));border-radius:28px;padding:7mm;color:#fff;display:grid;grid-template-columns:1fr 38mm;gap:7mm;align-items:center;position:relative;overflow:hidden}.ctaPanel::after{content:"";position:absolute;left:-10mm;top:-18mm;width:70mm;height:70mm;background:radial-gradient(circle,rgba(245,161,26,.34),transparent 68%)}.ctaPanel h3{font-size:28px;margin:0 0 3mm}.ctaPanel p{color:#dbe8f3;font-size:14px;line-height:1.5;margin:0 0 5mm}.qr{width:34mm;height:34mm;background:#fff;border-radius:10px;padding:3mm;display:grid;grid-template-columns:repeat(7,1fr);grid-template-rows:repeat(7,1fr);gap:1.2mm}.qr i{background:#071b2f;border-radius:1px}.qr i:nth-child(1),.qr i:nth-child(2),.qr i:nth-child(3),.qr i:nth-child(8),.qr i:nth-child(10),.qr i:nth-child(15),.qr i:nth-child(16),.qr i:nth-child(17),.qr i:nth-child(29),.qr i:nth-child(31),.qr i:nth-child(36),.qr i:nth-child(37),.qr i:nth-child(38),.qr i:nth-child(43),.qr i:nth-child(44),.qr i:nth-child(45),.qr i:nth-child(46),.qr i:nth-child(48){background:#071b2f}.qr i:nth-child(4n+2),.qr i:nth-child(5n+1){background:#f5a11a}.printNote{margin-top:4mm;color:#6f7b87;font-size:10px;line-height:1.45;font-weight:760}.noPrint{position:fixed;left:18px;bottom:18px;z-index:999;border:0;border-radius:999px;background:#25D366;color:white;padding:14px 20px;font-weight:950;box-shadow:0 14px 34px rgba(0,0,0,.18)}
+:root{
+  --navy:#062746;
+  --navy2:#0b3a63;
+  --gold:#f28a00;
+  --gold2:#ffbf54;
+  --paper:#fffaf0;
+  --card:#fffdf8;
+  --ink:#082846;
+  --muted:#5e6f80;
+  --line:#eadfcd;
+  --green:#22b573;
+}
+html,body{margin:0;background:#eee;color:var(--ink);font-family:Assistant,"Noto Sans Hebrew",Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{font-size:14px}
+.page{width:210mm;height:297mm;position:relative;overflow:hidden;background:
+  radial-gradient(circle at 18% 36%,rgba(242,138,0,.10),transparent 28%),
+  linear-gradient(180deg,#fffaf0 0%,#fffdf8 58%,#fff4df 100%);
+  padding:12mm 13mm 27mm;page-break-after:always}
+.logo{position:absolute;top:10mm;right:12mm;width:48mm;height:20mm;display:flex;align-items:center;justify-content:flex-start;z-index:10}
+.logo img{max-width:44mm;max-height:17mm;object-fit:contain}
+.logo strong{font-size:24px;letter-spacing:-.03em;color:#000;line-height:.8}
+.logo small{display:block;color:var(--gold);letter-spacing:.36em;font-size:8px;font-weight:900;margin-top:2px}
+.pageNo{position:absolute;top:13mm;left:14mm;font-size:18px;font-weight:950;color:var(--navy);direction:ltr}
+.pageNo::after{content:"";display:block;width:17mm;height:1px;background:var(--gold);margin-top:3mm}
+.bottomWave{position:absolute;left:0;right:0;bottom:0;height:44mm;background:linear-gradient(135deg,#041c33,#07385f);clip-path:ellipse(76% 57% at 50% 100%);z-index:2}
+.bottomWave::before{content:"";position:absolute;left:-5%;right:-5%;top:3mm;height:2mm;background:linear-gradient(90deg,var(--gold),var(--gold2));border-radius:99px}
+.bottomFeatures{position:absolute;right:18mm;left:18mm;bottom:9mm;z-index:3;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10mm;color:#fff;text-align:center}
+.bottomFeatures .bf{display:grid;place-items:center;gap:2mm;font-size:13px;font-weight:900}
+.bottomFeatures svg{width:13mm;height:13mm;color:#fff;border:1px solid rgba(255,255,255,.7);border-radius:50%;padding:3mm}
+.heroTitle{margin:38mm auto 4mm;text-align:center;font-size:42px;line-height:1.1;font-weight:950;letter-spacing:-.04em;color:var(--navy);max-width:170mm}
+.heroTitle .gold{color:var(--gold)}
+.subtitle{text-align:center;font-size:19px;line-height:1.45;color:var(--navy);font-weight:760;margin:0 auto 8mm;max-width:160mm}
+.card{background:rgba(255,255,255,.88);border:1px solid rgba(234,223,205,.9);border-radius:20px;box-shadow:0 16px 42px rgba(6,39,70,.10);backdrop-filter:blur(6px)}
+.metricGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:4mm;margin-top:8mm}
+.metric{min-height:45mm;padding:7mm 5mm;text-align:center}
+.metric .ico{width:18mm;height:18mm;margin:0 auto 3mm;border-radius:50%;background:#fff3de;color:var(--gold);display:grid;place-items:center}
+.metric .ico svg{width:11mm;height:11mm}
+.metric .label{font-size:15px;font-weight:900;color:var(--navy);min-height:9mm}
+.metric .value{font-size:30px;line-height:1;font-weight:950;color:var(--gold);direction:ltr;text-align:center;margin-top:3mm}
+.houseScene{position:absolute;right:0;left:0;bottom:39mm;height:128mm;background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,250,240,.55)),radial-gradient(circle at 17% 74%,rgba(242,138,0,.42),transparent 16%),linear-gradient(150deg,#d7e8f0,#fff3d9 50%,#e7f4e8);overflow:hidden}
+.houseScene::before{content:"";position:absolute;right:45mm;bottom:11mm;width:126mm;height:70mm;background:#f8f3e9;border-radius:5mm 5mm 0 0;box-shadow:0 20px 50px rgba(0,0,0,.22)}
+.houseScene::after{content:"";position:absolute;right:39mm;bottom:79mm;width:137mm;height:43mm;background:linear-gradient(135deg,#1e3348,#364f67);clip-path:polygon(7% 100%,50% 0,94% 100%);box-shadow:0 12px 24px rgba(0,0,0,.25)}
+.panelRows{position:absolute;right:66mm;bottom:95mm;width:83mm;height:29mm;transform:skewX(-12deg) rotate(-1deg);display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:repeat(3,1fr);gap:1px;z-index:2}
+.panelRows i{background:linear-gradient(145deg,#203b58,#314f70);border:1px solid rgba(255,255,255,.38)}
+.familyBox{position:absolute;right:13mm;bottom:87mm;width:68mm;z-index:4;display:grid;gap:4mm}
+.infoPill{height:23mm;padding:4mm 5mm;display:grid;grid-template-columns:15mm 1fr;align-items:center}
+.infoPill .circle{width:12mm;height:12mm;border:1.5px solid var(--gold);border-radius:50%;display:grid;place-items:center;color:var(--gold)}
+.infoPill small{display:block;color:var(--muted);font-weight:800}
+.infoPill b{display:block;color:var(--navy);font-size:18px}
+.scoreCircle{position:absolute;left:16mm;bottom:68mm;width:58mm;height:58mm;border-radius:50%;background:#fffaf0;border:3mm solid var(--gold);box-shadow:0 15px 36px rgba(0,0,0,.18);display:grid;place-items:center;text-align:center;z-index:4}
+.scoreCircle small{display:block;font-size:12px;color:var(--navy);font-weight:900}
+.scoreCircle b{display:block;font-size:42px;line-height:.9;color:var(--gold);font-weight:950;direction:ltr}
+.scoreCircle span{font-size:13px;color:var(--gold);letter-spacing:.05em}
+.contentTop{margin-top:34mm}
+.sectionTitle{text-align:center;font-size:41px;line-height:1.05;font-weight:950;color:var(--navy);letter-spacing:-.04em;margin:0 0 4mm}
+.sectionSubtitle{text-align:center;font-size:18px;color:var(--navy);font-weight:760;margin:0 auto 8mm;max-width:160mm}
+.summaryStrip{display:grid;grid-template-columns:70mm 1fr;gap:5mm;margin-top:5mm;min-height:43mm}
+.summaryStrip .photo{background:linear-gradient(150deg,#d7e8f0,#fff2d0);border-radius:17px;position:relative;overflow:hidden}
+.summaryStrip .photo::before{content:"";position:absolute;right:8mm;bottom:4mm;width:55mm;height:27mm;background:#f8f3e9}
+.summaryStrip .photo::after{content:"";position:absolute;right:6mm;bottom:30mm;width:60mm;height:20mm;background:#273f5b;clip-path:polygon(9% 100%,50% 0,92% 100%)}
+.summaryNote{padding:6mm 7mm;font-size:18px;line-height:1.55;font-weight:760;color:var(--navy)}
+.roofLayout{display:grid;grid-template-columns:1.5fr .85fr;gap:6mm;align-items:stretch}
+.roofPhoto{height:170mm;border-radius:23px;position:relative;overflow:hidden;background:linear-gradient(150deg,#d7e8f0,#fff1d5 48%,#e7f3df)}
+.roofPhoto .house{position:absolute;right:18mm;bottom:21mm;width:126mm;height:78mm;background:#f8f3e9;box-shadow:0 18px 46px rgba(0,0,0,.22)}
+.roofPhoto .roof{position:absolute;right:10mm;bottom:99mm;width:138mm;height:50mm;background:#263f5a;clip-path:polygon(5% 100%,50% 0,96% 100%)}
+.roofPhoto .pv{position:absolute;right:34mm;bottom:113mm;width:88mm;height:35mm;transform:skewX(-13deg) rotate(-2deg);display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:repeat(3,1fr);gap:1px;border:2px solid var(--gold);padding:1px;background:rgba(242,138,0,.2)}
+.roofPhoto .pv i{background:#263f5a;border:1px solid rgba(255,255,255,.38)}
+.tag{position:absolute;background:#fff;border-radius:8px;padding:2mm 4mm;color:var(--navy);font-size:13px;font-weight:900;box-shadow:0 8px 20px rgba(0,0,0,.12)}
+.tag.one{right:55mm;top:34mm}.tag.two{right:8mm;top:74mm}.tag.three{left:18mm;bottom:64mm}
+.sideMetrics{display:grid;gap:5mm}
+.sideMetric{min-height:35mm;padding:5mm 6mm;display:grid;grid-template-columns:16mm 1fr;align-items:center;gap:3mm}
+.sideMetric .ico{color:var(--gold)}
+.sideMetric svg{width:12mm;height:12mm}
+.sideMetric small{display:block;color:var(--navy);font-size:13px;font-weight:900}
+.sideMetric b{display:block;color:var(--gold);font-size:25px;line-height:1.1;font-weight:950}
+.finGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:4mm;margin-bottom:7mm}
+.finMetric{padding:6mm 3mm;text-align:center;min-height:42mm}
+.finMetric .value{color:var(--gold);font-size:27px;font-weight:950;direction:ltr}
+.finMetric .label{color:var(--navy);font-size:14px;font-weight:900}
+.chartRow{display:grid;grid-template-columns:1.28fr .72fr;gap:6mm}
+.chartBox{height:118mm;padding:6mm}
+.chartTitle{font-size:18px;color:var(--navy);font-weight:950;text-align:center;margin-bottom:5mm}
+.barChart{height:82mm;border-right:1px solid #b7c2cc;border-bottom:1px solid #b7c2cc;display:grid;grid-template-columns:repeat(4,1fr);gap:9mm;align-items:end;padding:5mm 7mm 0}
+.barGroup{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:2mm}
+.barGroup i{display:block;width:18mm;border-radius:10px 10px 0 0;background:linear-gradient(180deg,var(--gold2),var(--gold))}
+.barGroup.negative i{background:linear-gradient(180deg,#ffb17f,#e86b2f)}
+.barGroup b{font-size:11px;color:var(--navy);font-weight:900}
+.barGroup span{font-size:11px;color:var(--navy);font-weight:900;direction:ltr}
+.meaning{padding:8mm 7mm;background:linear-gradient(180deg,#fff8eb,#fffdf8)}
+.meaning h3{font-size:23px;margin:0 0 6mm;color:var(--navy)}
+.checkLine{display:grid;grid-template-columns:10mm 1fr;gap:3mm;align-items:start;margin:6mm 0;color:var(--navy);font-size:16px;font-weight:760;line-height:1.4}
+.checkLine i{width:8mm;height:8mm;border-radius:50%;background:var(--gold);color:#fff;display:grid;place-items:center;font-style:normal;font-weight:900}
+.energyLayout{display:grid;grid-template-columns:1.45fr .7fr;gap:6mm}
+.monthBox{height:133mm;padding:6mm}
+.monthChart{height:85mm;display:grid;grid-template-columns:repeat(12,1fr);gap:2mm;align-items:end;border-right:1px solid #c4ccd5;border-bottom:1px solid #c4ccd5;padding:4mm 4mm 0}
+.month{height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:1.5mm}
+.month i{width:100%;border-radius:99px 99px 0 0;background:linear-gradient(180deg,var(--gold2),var(--gold))}
+.month span{font-size:8px;color:var(--navy);font-weight:900}
+.donutBox{padding:6mm;text-align:center}
+.donut{width:54mm;height:54mm;border-radius:50%;margin:0 auto 5mm;background:conic-gradient(var(--gold) 0 ${selfWidth}%,var(--navy) ${selfWidth}% 100%);display:grid;place-items:center}
+.donut::after{content:"";width:31mm;height:31mm;background:#fffaf0;border-radius:50%;box-shadow:inset 0 0 0 1px var(--line)}
+.kpiList{display:grid;gap:4mm}
+.kpi{padding:5mm;text-align:center}
+.kpi b{display:block;font-size:28px;color:var(--gold);font-weight:950;direction:ltr}
+.kpi span{font-size:14px;color:var(--navy);font-weight:900}
+.systemHero{height:83mm;position:relative;background:linear-gradient(150deg,#d7e8f0,#fff2d4);border-radius:24px;overflow:hidden;margin-bottom:6mm}
+.systemHero::before{content:"";position:absolute;right:83mm;bottom:8mm;width:88mm;height:47mm;background:#f8f3e9}
+.systemHero::after{content:"";position:absolute;right:78mm;bottom:55mm;width:96mm;height:31mm;background:#263f5a;clip-path:polygon(8% 100%,50% 0,93% 100%)}
+.systemBadge{position:absolute;right:8mm;top:12mm;width:57mm;min-height:55mm;text-align:center;padding:7mm 4mm;border:2px solid var(--gold);background:#fffaf0;border-radius:19px;z-index:3}
+.systemBadge small{display:block;color:var(--navy);font-size:15px;font-weight:900}
+.systemBadge b{display:block;color:var(--gold);font-size:42px;line-height:1;font-weight:950;direction:ltr}
+.featureGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:3mm}
+.feature{padding:5mm 3mm;text-align:center;min-height:48mm}
+.feature b{display:block;color:var(--navy);font-size:15px;margin-bottom:2mm}
+.feature span{display:block;color:var(--muted);font-size:11px;line-height:1.35;font-weight:760}
+.trustGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:4mm}
+.trust{padding:6mm 4mm;text-align:center;min-height:76mm}
+.trust .ico{color:var(--gold);margin-bottom:4mm}
+.trust svg{width:15mm;height:15mm}
+.trust b{display:block;color:var(--navy);font-size:15px;margin-bottom:3mm}
+.trust span{display:block;color:var(--muted);font-size:12px;line-height:1.45;font-weight:760}
+.timeline{margin-top:8mm;padding:7mm;display:grid;grid-template-columns:repeat(4,1fr);gap:4mm}
+.step{text-align:center;position:relative}
+.step i{width:10mm;height:10mm;border-radius:50%;background:var(--gold);color:#fff;display:grid;place-items:center;margin:0 auto 3mm;font-style:normal;font-weight:950}
+.step b{display:block;color:var(--navy);font-size:14px}
+.step span{display:block;color:var(--muted);font-size:11px;line-height:1.35;margin-top:1mm}
+.planGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:5mm;margin-top:8mm}
+.plan{min-height:132mm;padding:7mm 5mm;text-align:center;position:relative}
+.plan.recommended{border:2px solid var(--gold);transform:translateY(-3mm)}
+.plan .tagRec{position:absolute;top:-8mm;right:50%;transform:translateX(50%);background:linear-gradient(135deg,var(--gold),var(--gold2));color:#fff;border-radius:99px;padding:2.5mm 8mm;font-weight:950}
+.plan .icon{color:var(--gold);margin-bottom:4mm}
+.plan svg{width:17mm;height:17mm}
+.plan h3{font-size:28px;color:var(--navy);margin:0 0 3mm}
+.plan .desc{font-size:14px;color:var(--navy);font-weight:760;min-height:14mm}
+.plan ul{list-style:none;padding:0;margin:6mm 0;display:grid;gap:3mm}
+.plan li{font-size:12px;color:var(--navy);font-weight:760}
+.plan li::before{content:"✓";color:var(--gold);font-weight:950;margin-left:2mm}
+.plan .price{font-size:25px;color:var(--gold);font-weight:950;direction:ltr}
+.ctaBox{margin-top:6mm;display:grid;grid-template-columns:68mm 1fr;gap:6mm;align-items:center;padding:5mm}
+.ctaPhoto{height:38mm;border-radius:14px;background:linear-gradient(150deg,#d7e8f0,#fff2d4);position:relative;overflow:hidden}
+.ctaPhoto::before{content:"";position:absolute;right:9mm;bottom:4mm;width:48mm;height:23mm;background:#f8f3e9}
+.ctaPhoto::after{content:"";position:absolute;right:7mm;bottom:25mm;width:52mm;height:18mm;background:#263f5a;clip-path:polygon(8% 100%,50% 0,94% 100%)}
+.ctaText h3{font-size:24px;margin:0 0 2mm;color:var(--navy)}
+.ctaText p{font-size:14px;line-height:1.45;color:var(--navy);font-weight:760;margin:0 0 4mm}
+.whatsapp{display:inline-flex;align-items:center;justify-content:center;background:#25D366;color:white;border-radius:999px;padding:4mm 10mm;font-size:17px;font-weight:950;text-decoration:none;box-shadow:0 12px 24px rgba(37,211,102,.22)}
+.noPrint{position:fixed;left:18px;bottom:18px;z-index:1000;border:0;background:#25D366;color:#fff;border-radius:999px;padding:13px 20px;font-weight:950;box-shadow:0 12px 28px rgba(0,0,0,.18)}
 @media print{body{background:white}.noPrint{display:none}.page{box-shadow:none}}
 </style>
 </head>
 <body>
 <button class="noPrint" onclick="window.print()">שמירה / הדפסה ל-PDF</button>
-<section class="page cover">
-  <div class="coverHero"><div class="coverGlow"></div><div class="coverPattern"></div></div>
-  <div class="coverTop"><div class="logo">${cleanLogoSrc ? `<img src="${cleanLogoSrc}" alt="Solatrix Energy" />` : '<span class="logoText">SOLATRIX</span>'}</div><div class="eyebrow">Premium Solar Proposal</div></div>
-  <div class="coverContent">
-    <div class="eyebrow">נבנה במיוחד עבור הנכס שלך</div>
-    <h1>הצעה סולארית שמראה ללקוח את הערך של הבית שלו</h1>
-    <p class="coverLead">מסמך מסחרי פרימיום: פוטנציאל גג, תכנון מערכת, תחזית חיסכון והמלצה ברורה להתקדמות עם Solatrix.</p>
-    <div class="coverClient"><div class="box"><small>לקוח</small><b>${customer}</b></div><div class="box"><small>נכס</small><b>${address}</b></div></div>
+
+<section class="page">
+  <div class="logo">${logo}</div>
+  <div class="pageNo">01</div>
+  <h1 class="heroTitle">הבית שלכם יכול<br>לייצר לכם <span class="gold">ערך</span> כל יום</h1>
+  <p class="subtitle">פתרון סולארי מותאם לבית שלכם, לחיסכון בהוצאות ולשקט נפשי לאורך שנים.</p>
+  <div class="houseScene"><div class="panelRows">${repeat('<i></i>', 15)}</div></div>
+  <div class="familyBox">
+    <div class="card infoPill"><div class="circle">${iconFamily()}</div><div><small>הוכן עבור</small><b>${escapeHtml(customerName)}</b></div></div>
+    <div class="card infoPill"><div class="circle">${iconPin()}</div><div><small>כתובת הבית</small><b>${escapeHtml(address)}</b></div></div>
   </div>
-  <div class="solarPlane">${solarPlaneSvg()}</div>
-  <div class="coverScore"><div class="coverScoreInner"><strong>${score.score}</strong><span>Solar Score<br/>${score.label}</span></div></div>
-  <div class="footerBrand">Solatrix Energy · הצעה ראשונית לפני סיור טכני</div><div class="pageNo">01</div>
+  <div class="scoreCircle"><div><small>Solar Score</small><b>${score}</b><span>★★★★★</span></div></div>
+  ${bottomFooter()}
 </section>
+
 <section class="page">
-  <div class="watermark">S</div>
-  <div class="heroStrip"><div class="eyebrow">Executive Summary</div><h2>החלטה מהירה: האם הגג הזה שווה בדיקה מקצועית?</h2><p>לפי הנתונים שהוזנו, לגג יש פוטנציאל כלכלי ברור. המטרה של המסמך היא להפוך את הנתונים להחלטה פשוטה: כמה אפשר לייצר, כמה אפשר לחסוך, ומה הצעד הבא.</p></div>
-  <div class="grid4">
-    <div class="card metric"><span>מערכת מומלצת</span><b>${safeReport.systemKw.toFixed(1)} kW</b><small>מותאם לשטח השימושי</small></div>
-    <div class="card metric"><span>ייצור שנתי</span><b>${formatNumber(safeReport.annualProduction)} kWh</b><small>הערכת ייצור ראשונית</small></div>
-    <div class="card metric"><span>חיסכון שנתי</span><b>${formatMoney(safeReport.annualSavings)}</b><small>צריכה עצמית + מכירה</small></div>
-    <div class="card metric"><span>רווח ל-25 שנה</span><b>${formatMoney(safeReport.profit25)}</b><small>לפני בדיקת שטח סופית</small></div>
+  <div class="logo">${logo}</div><div class="pageNo">02</div>
+  <div class="contentTop">
+    <h2 class="sectionTitle">סיכום קצר לבית שלכם</h2>
+    <p class="sectionSubtitle">במבט אחד — כמה הבית יכול לייצר, לחסוך ולהחזיר לאורך השנים.</p>
+    <div class="metricGrid">${summaryMetrics}</div>
+    <div class="summaryStrip card">
+      <div class="photo"></div>
+      <div class="summaryNote">הנתונים מבוססים על בדיקה ראשונית של הגג והצריכה. בשלב הבא נבצע בדיקה מדויקת יותר ונבנה הצעה מלאה לבית שלכם.</div>
+    </div>
   </div>
-  <div class="summaryNarrative">
-    <div class="decisionCard"><h3>המסר ללקוח</h3><p>הבית שלך יכול להפוך מנכס שצורך חשמל לנכס שמייצר ערך. המערכת המוצעת מתוכננת לנצל את הגג בצורה נקייה, אסתטית וכלכלית - בלי להפוך את ההחלטה למורכבת.</p></div>
-    <div class="card confidence"><span>רמת ביטחון בהערכה</span><b>${confidence}%</b><div class="scoreBar"><i></i></div><small>מבוסס על שטח מסומן, צריכה, תעריפים ומכשולים</small></div>
+  ${bottomFooter()}
+</section>
+
+<section class="page">
+  <div class="logo">${logo}</div><div class="pageNo">03</div>
+  <div class="contentTop">
+    <h2 class="sectionTitle">הגג הדיגיטלי שלכם</h2>
+    <p class="sectionSubtitle">כך אנחנו רואים את פוטנציאל הייצור של הבית שלכם.</p>
+    <div class="roofLayout">
+      <div class="roofPhoto">
+        <div class="roof"></div><div class="house"></div><div class="pv">${repeat('<i></i>', 15)}</div>
+        <div class="tag one">דוד שמש</div><div class="tag two">אזור מתאים להתקנה</div><div class="tag three">מזגן</div>
+      </div>
+      <div class="sideMetrics">${roofMetrics}</div>
+    </div>
   </div>
-  <div class="grid3" style="margin-top:5mm"><div class="card metric"><span>החזר השקעה</span><b>${Number(safeReport.payback).toFixed(1)} שנים</b></div><div class="card metric"><span>תשואה שנתית משוערת</span><b>${annualYield.toFixed(1)}%</b></div><div class="card metric"><span>תזרים ל-10 שנים</span><b>${formatMoney(cumulative10)}</b></div></div>
-  <div class="footerBrand">Solatrix Energy · תקציר החלטה</div><div class="pageNo">02</div>
+  ${bottomFooter()}
 </section>
+
 <section class="page">
-  <div class="sectionHead"><div><div class="sectionKicker">Digital Roof</div><h2 class="title">הגג הדיגיטלי של הנכס</h2><p class="sub">הלקוח צריך לראות את הבית שלו, לא טבלה. בשלב הזה אנחנו מציגים סימון גג פרימיום מתוך הכלי; בהמשך הוא יתחבר לצילום לוויין אמיתי.</p></div><div class="sectionNumber">03 / 08</div></div>
-  <div class="roofStage"><div class="roofVisual"><div class="roofTag">Roof Intelligence Preview</div><div class="north">N ↑</div>${roofSvg}</div><div><div class="miniMetrics">${roofSummary}</div><div class="diagnosis card"><h3>מה רואים בגג?</h3><ul><li><i></i><span>שטח שימושי שמספיק למערכת משמעותית, בלי להעמיס על הלקוח פרטים טכניים.</span></li><li><i></i><span>הפוטנציאל הכלכלי נובע בעיקר משילוב בין צריכה עצמית ומכירה לרשת.</span></li><li><i></i><span>לפני חתימה סופית נדרש סיור שטח, בדיקת חשמל ומדידה מדויקת.</span></li></ul></div></div></div>
-  <div class="footerBrand">Solatrix Energy · הדמיית גג</div><div class="pageNo">03</div>
+  <div class="logo">${logo}</div><div class="pageNo">04</div>
+  <div class="contentTop">
+    <h2 class="sectionTitle">כמה זה שווה לכם לאורך זמן?</h2>
+    <p class="sectionSubtitle">תמונה פשוטה וברורה של ההשקעה, החיסכון וההחזר.</p>
+    <div class="finGrid">
+      ${financeMetric('עלות מערכת משוערת', money(safeReport.cost), iconPanel())}
+      ${financeMetric('חיסכון שנתי צפוי', money(safeReport.annualSavings), iconPiggy())}
+      ${financeMetric('החזר השקעה', `${safeReport.payback.toFixed(1)} שנים`, iconCycle())}
+      ${financeMetric('רווח מצטבר ב-25 שנה', money(safeReport.profit25), iconGrowth())}
+    </div>
+    <div class="chartRow">
+      <div class="card chartBox">
+        <div class="chartTitle">הערך שלכם לאורך זמן</div>
+        <div class="barChart">
+          <div class="barGroup negative"><span>${money(-safeReport.cost)}</span><i style="height:31%"></i><b>השקעה</b></div>
+          <div class="barGroup"><span>${money(safeReport.annualSavings)}</span><i style="height:22%"></i><b>שנה 1</b></div>
+          <div class="barGroup"><span>${money(cumulative10)}</span><i style="height:58%"></i><b>10 שנים</b></div>
+          <div class="barGroup"><span>${money(cumulative25)}</span><i style="height:96%"></i><b>25 שנים</b></div>
+        </div>
+      </div>
+      <div class="card meaning">
+        <h3>מה זה אומר בפועל?</h3>
+        <div class="checkLine"><i>✓</i><span>אתם מפחיתים משמעותית את חשבון החשמל.</span></div>
+        <div class="checkLine"><i>✓</i><span>אתם בונים ערך אמיתי לנכס שלכם לאורך זמן.</span></div>
+        <div class="checkLine"><i>✓</i><span>אתם יוצרים שקט וביטחון כלכלי למשפחה.</span></div>
+      </div>
+    </div>
+  </div>
+  ${bottomFooter()}
 </section>
+
 <section class="page">
-  <div class="sectionHead"><div><div class="sectionKicker">Recommended System</div><h2 class="title">מערכת מומלצת לבית</h2><p class="sub">לא מוכרים קילוואטים. מוכרים פתרון: תכנון נכון, ציוד אמין, החזר ברור ונראות מסודרת על הגג.</p></div><div class="sectionNumber">04 / 08</div></div>
-  <div class="systemLayout"><div class="systemHero"><h3>המלצת Solatrix</h3><div class="big ltr">${safeReport.systemKw.toFixed(1)} kW</div><p>מערכת בגודל הזה מאזנת בין שטח הגג, הייצור השנתי, צריכת הבית והיכולת לייצר ערך פיננסי לאורך שנים.</p><div class="flow"><b>תמהיל האנרגיה</b><div class="flowLine"></div><div class="flowLegend"><span>צריכה עצמית ${Math.round(selfWidth)}%</span><span>מכירה לרשת ${Math.round(exportWidth)}%</span></div></div></div><div class="specs">
-    <div class="spec">${iconPanels()}<div><span>מספר פאנלים משוער</span><b>${safeReport.panels} פאנלים</b></div></div>
-    <div class="spec">${iconInverter()}<div><span>ייצור שנתי צפוי</span><b>${formatNumber(safeReport.annualProduction)} kWh</b></div></div>
-    <div class="spec">${iconBattery()}<div><span>צריכה עצמית משוערת</span><b>${formatNumber(safeReport.selfConsumed)} kWh</b></div></div>
-    <div class="spec">${iconGrid()}<div><span>מכירה לרשת</span><b>${formatNumber(safeReport.exported)} kWh</b></div></div>
-    <div class="card"><h3 style="margin:0 0 3mm;color:var(--navy);font-size:20px">מה מקבלים?</h3><p style="margin:0;color:#62707d;line-height:1.55;font-weight:760">תכנון מערכת, פריסת פאנלים, בדיקת חיבור, הכנה לאישורי חברת חשמל ותהליך ליווי מסודר עד להתקנה.</p></div>
-  </div></div>
-  <div class="footerBrand">Solatrix Energy · המלצת מערכת</div><div class="pageNo">04</div>
+  <div class="logo">${logo}</div><div class="pageNo">05</div>
+  <div class="contentTop">
+    <h2 class="sectionTitle">איך האנרגיה תעבוד עבור הבית שלכם</h2>
+    <p class="sectionSubtitle">מתי הגג מייצר, כמה נשאר בבית וכמה נמכר לרשת.</p>
+    <div class="energyLayout">
+      <div class="card monthBox">
+        <div class="chartTitle">ייצור חודשי משוער (kWh)</div>
+        <div class="monthChart">${monthlyBars}</div>
+        <div class="summaryNote" style="font-size:16px;padding:5mm 2mm 0">בימי שמש, הגג שלכם מייצר יותר חשמל ומספק חלק גדול מהצריכה הביתית. החשמל שנשאר נמכר לרשת ומייצר לכם הכנסה נוספת לאורך השנה.</div>
+      </div>
+      <div class="kpiList">
+        <div class="card donutBox"><div class="chartTitle">חלוקת האנרגיה השנתית</div><div class="donut"></div><b style="color:var(--gold);font-size:22px">${Math.round(selfWidth)}%</b><span style="display:block;color:var(--navy);font-weight:900">שימוש עצמי</span></div>
+        <div class="card kpi"><span>ייצור שנתי</span><b>${number(safeReport.annualProduction)} kWh</b></div>
+        <div class="card kpi"><span>שימוש עצמי משוער</span><b>${number(safeReport.selfConsumed)} kWh</b></div>
+        <div class="card kpi"><span>מכירה לרשת</span><b>${number(safeReport.exported)} kWh</b></div>
+      </div>
+    </div>
+  </div>
+  ${bottomFooter()}
 </section>
+
 <section class="page">
-  <div class="sectionHead"><div><div class="sectionKicker">Financial Overview</div><h2 class="title">תמונה פיננסית שמובילה להחלטה</h2><p class="sub">העמוד הזה צריך לגרום ללקוח להבין: ההשקעה ברורה, החיסכון ברור, והשלב הבא הוא בדיקת שטח.</p></div><div class="sectionNumber">05 / 08</div></div>
-  <div class="financeHero"><div class="valueCard card"><span>עלות מערכת משוערת</span><strong>${formatMoney(safeReport.cost)}</strong><p>אומדן ראשוני לפי גודל מערכת ועלות התקנה בסיסית. מחיר סופי לאחר סיור.</p></div><div class="valueCard card"><span>חיסכון/הכנסה שנתית</span><strong>${formatMoney(safeReport.annualSavings)}</strong><p>מבוסס על תעריף קנייה, תעריף מכירה ותמהיל צריכה עצמית.</p></div></div>
-  <div class="waterfall"><h3>איך הערך נבנה לאורך זמן</h3><div class="wfBars"><div class="wfBar neg"><b>${formatMoney(-safeReport.cost)}</b><i style="height:38%"></i><span>השקעה</span></div><div class="wfBar"><b>${formatMoney(safeReport.annualSavings)}</b><i style="height:32%"></i><span>שנה 1</span></div><div class="wfBar"><b>${formatMoney(cumulative10)}</b><i style="height:62%"></i><span>10 שנים</span></div><div class="wfBar"><b>${formatMoney(cumulative25)}</b><i style="height:95%"></i><span>25 שנים</span></div></div><div class="axis"></div></div>
-  <div class="paybackLine"><div style="display:flex;justify-content:space-between;font-size:12px;color:#62707d;font-weight:900;margin-bottom:2mm"><span>מהירות החזר השקעה</span><span>${Number(safeReport.payback).toFixed(1)} שנים</span></div><div class="paybackTrack"><i></i></div></div>
-  <div class="footerBrand">Solatrix Energy · פיננסים</div><div class="pageNo">05</div>
+  <div class="logo">${logo}</div><div class="pageNo">06</div>
+  <div class="contentTop">
+    <h2 class="sectionTitle">המערכת המומלצת לבית שלכם</h2>
+    <p class="sectionSubtitle">פתרון סולארי שמתאים לגודל הבית, לצריכה ולמראה של הגג.</p>
+    <div class="systemHero"><div class="systemBadge"><small>מערכת מומלצת</small><b>${safeReport.systemKw.toFixed(1)}</b><small>kW</small></div></div>
+    <div class="featureGrid">${systemFeatures}</div>
+    <div class="summaryStrip card" style="grid-template-columns:1fr 60mm;margin-top:6mm">
+      <div class="summaryNote"><b>מה מקבלים?</b><br>תכנון מותאם אישית, עבודה נקייה ומסודרת, ליווי מקצועי ותמיכה לאורך שנים.</div>
+      <div class="scoreCircle" style="position:relative;left:auto;bottom:auto;width:42mm;height:42mm;border-width:2mm;margin:auto"><div><small>Solar Score</small><b style="font-size:30px">${score}</b><span>★★★★★</span></div></div>
+    </div>
+  </div>
+  ${bottomFooter()}
 </section>
+
 <section class="page">
-  <div class="sectionHead"><div><div class="sectionKicker">Energy Analytics</div><h2 class="title">אנליטיקה אנרגטית</h2><p class="sub">גרפים פשוטים, בלי עומס. הלקוח רואה מתי הגג מייצר, כמה אנרגיה נשארת בבית וכמה נמכרת לרשת.</p></div><div class="sectionNumber">06 / 08</div></div>
-  <div class="analyticsGrid"><div class="monthChart"><h3>ייצור חודשי משוער</h3><div class="months">${monthlyBars}</div></div><div class="energySplit"><div class="card"><div class="donut"></div><div class="splitLegend"><div><span>צריכה עצמית</span><b>${formatNumber(safeReport.selfConsumed)} kWh</b></div><div><span>מכירה לרשת</span><b>${formatNumber(safeReport.exported)} kWh</b></div><div><span>תעריף אפקטיבי</span><b>₪${safeReport.effectiveTariff.toFixed(2)}</b></div></div></div><div class="card"><h3 style="margin:0 0 3mm;color:var(--navy)">המשמעות</h3><p style="margin:0;color:#65717d;line-height:1.55;font-weight:760">הערך הגבוה ביותר מגיע מקוט״ש שהבית צורך בעצמו. לכן תכנון נכון של גודל המערכת חשוב יותר ממערכת גדולה מדי.</p></div></div></div>
-  <div class="footerBrand">Solatrix Energy · אנרגיה</div><div class="pageNo">06</div>
+  <div class="logo">${logo}</div><div class="pageNo">07</div>
+  <div class="contentTop">
+    <h2 class="sectionTitle">למה לבחור ב‑Solatrix</h2>
+    <p class="sectionSubtitle">לא רק מערכת סולארית — אלא תהליך ברור, אישי ומקצועי.</p>
+    <div class="trustGrid">${trustCards}</div>
+    <div class="card timeline">
+      ${timeline}
+    </div>
+  </div>
+  ${bottomFooter()}
 </section>
+
 <section class="page">
-  <div class="sectionHead"><div><div class="sectionKicker">Investment Options</div><h2 class="title">שלושה מסלולי השקעה</h2><p class="sub">הלקוח לא צריך להרגיש שמכריחים אותו. הוא צריך לראות בחירה, להבין את ההבדלים, ולבחור במסלול המומלץ.</p></div><div class="sectionNumber">07 / 08</div></div>
-  <div class="investmentCards">${optionsHtml}</div>
-  <div class="decisionCard" style="margin-top:6mm"><h3>המלצה מסחרית</h3><p>ברוב הבתים, המסלול המומלץ נותן את האיזון הטוב ביותר בין השקעה, החזר, ייצור ונראות על הגג. המסלול המדויק מתאים ללקוח שרוצה להתחיל בזהירות; הפרימיום מתאים למי שרוצה למקסם פוטנציאל.</p></div>
-  <div class="footerBrand">Solatrix Energy · מסלולי השקעה</div><div class="pageNo">07</div>
+  <div class="logo">${logo}</div><div class="pageNo">08</div>
+  <div class="contentTop">
+    <h2 class="sectionTitle">השלב הבא לבית שלכם</h2>
+    <p class="sectionSubtitle">בחרו את המסלול שמתאים לכם וקבלו בדיקה מלאה לבית.</p>
+    <div class="planGrid">${plans}</div>
+    <div class="card ctaBox">
+      <div class="ctaPhoto"></div>
+      <div class="ctaText">
+        <h3>נעשה את הצעד הבא יחד</h3>
+        <p>בדיקה קצרה בבית שלכם תאפשר לנו להבין את הצרכים המדויקים ולהכין לכם הצעה מותאמת אישית.</p>
+        <a class="whatsapp" href="${whatsappUrl}">לתיאום בדיקה לבית שלכם</a>
+        <p style="font-size:12px;margin-top:3mm">${customerPhone ? `טלפון לקוח: ${escapeHtml(customerPhone)} · ` : ''}Solatrix Energy</p>
+      </div>
+    </div>
+  </div>
+  ${bottomFooter()}
 </section>
-<section class="page">
-  <div class="sectionHead"><div><div class="sectionKicker">Why Solatrix</div><h2 class="title">למה להתקדם עם Solatrix</h2><p class="sub">כאן סוגרים אמון. לא עוד מספרים - אלא תהליך מקצועי, אחריות, ותמונה ברורה של הצעד הבא.</p></div><div class="sectionNumber">08 / 08</div></div>
-  <div class="trustGrid"><div class="trustItem">${iconShield()}<div><b>בדיקה מקצועית לפני התחייבות</b><span>סיור שטח, בדיקת חשמל, מדידות ואימות נתונים לפני הצעה סופית.</span></div></div><div class="trustItem">${iconDesign()}<div><b>תכנון פרימיום ולא ״מחשבון״</b><span>התאמת מערכת לבית, לצריכה ולמגבלות הגג - לא מספר כללי.</span></div></div><div class="trustItem">${iconMonitor()}<div><b>ליווי עד חיבור וניטור</b><span>תהליך עבודה מסודר משלב ההצעה ועד מערכת פעילה ומנוטרת.</span></div></div><div class="trustItem">${iconDocs()}<div><b>שקיפות פיננסית</b><span>חישוב שמפריד בין חיסכון עצמי, מכירה לרשת והנחות ארוכות טווח.</span></div></div></div>
-  <div class="timeline"><div class="timeStep"><small>01</small><b>שיחת התאמה</b></div><div class="timeStep"><small>02</small><b>סיור טכני</b></div><div class="timeStep"><small>03</small><b>הצעה סופית</b></div><div class="timeStep"><small>04</small><b>התקנה וחיבור</b></div></div>
-  <div class="ctaPanel"><div><h3>הגג שלך מוכן לבדיקה מקצועית</h3><p>הצעד הבא הוא לתאם סיור קצר ולבנות הצעה סופית עם פריסת פאנלים, בדיקת חשמל ואישור נתונים.</p><a class="button" href="${whatsappUrl}">לתיאום בדיקה ב-WhatsApp</a><div class="printNote">${phone ? `טלפון לקוח: ${phone} · ` : ''}Solatrix Energy · WhatsApp ${defaultPhone}</div></div><div class="qr">${Array.from({ length: 49 }).map(() => '<i></i>').join('')}</div></div>
-  <div class="footerBrand">Solatrix Energy · קריאה לפעולה</div><div class="pageNo">08</div>
-</section>
+
 <script>setTimeout(() => window.print(), 650)</script>
 </body>
 </html>`;
@@ -146,85 +401,106 @@ function normalizeReport(report) {
     effectiveTariff,
     payback,
     profit25: Number(report.profit25 || annualSavings * 25 - cost),
-    panels: Number(report.panels || Math.max(1, Math.round(systemKw / 0.63))),
-    roofArea: Number(report.roofArea || 0),
-    usableArea: Number(report.usableArea || 0),
-    selfConsumed: Number(report.selfConsumed || annualProduction * 0.45),
-    exported: Number(report.exported || Math.max(0, annualProduction * 0.55)),
-    selfUseShare: Number(report.selfUseShare || 45),
+    panels: Number(report.panels || Math.max(1, Math.round(systemKw / 0.4))),
+    roofArea: Number(report.roofArea || 80),
+    usableArea: Number(report.usableArea || 55),
+    selfConsumed: Number(report.selfConsumed || annualProduction * 0.44),
+    exported: Number(report.exported || Math.max(0, annualProduction * 0.56)),
+    selfUseShare: Number(report.selfUseShare || 44),
   };
 }
 
 function solarScore(report, state) {
-  const roof = Math.max(0, Math.min(34, report.usableArea / 2.1));
-  const production = Math.max(0, Math.min(26, report.annualProduction / 900));
-  const finance = Math.max(0, Math.min(24, 34 - Number(report.payback) * 3.2));
+  const roof = Math.max(0, Math.min(36, report.usableArea / 1.8));
+  const production = Math.max(0, Math.min(28, report.annualProduction / 620));
+  const finance = Math.max(0, Math.min(24, 36 - Number(report.payback || 0) * 4));
   const obstacles = Array.isArray(state.obstacles) ? state.obstacles : [];
   const shadePenalty = obstacles.includes('shade') ? 8 : 0;
-  const score = Math.round(Math.max(0, Math.min(100, roof + production + finance + 20 - shadePenalty)));
-  const label = score >= 88 ? 'מצוין' : score >= 76 ? 'חזק מאוד' : score >= 62 ? 'טוב' : 'דורש בדיקה';
-  return { score, label };
+  return Math.round(Math.max(62, Math.min(97, roof + production + finance + 16 - shadePenalty)));
 }
 
 function confidenceScore(report, state) {
-  const hasAddress = Boolean(state.address);
-  const hasSurface = Array.isArray(state.surfaces) && state.surfaces.length > 0;
-  const hasBill = Number(state.monthlyBill || 0) > 0;
-  const data = [hasAddress, hasSurface, hasBill, report.annualProduction > 0, report.cost > 0].filter(Boolean).length;
-  return Math.round(68 + data * 5.4);
+  const points = [state.address, Array.isArray(state.surfaces) && state.surfaces.length, state.monthlyBill, report.annualProduction, report.cost].filter(Boolean).length;
+  return Math.round(68 + points * 5.5);
 }
 
 function monthlyProduction(report) {
-  const weights = [0.058,0.066,0.083,0.096,0.108,0.116,0.122,0.116,0.101,0.084,0.065,0.055];
+  const weights = [0.056,0.064,0.083,0.097,0.111,0.121,0.124,0.118,0.103,0.083,0.065,0.055];
   const months = ['ינו׳','פבר׳','מרץ','אפר׳','מאי','יוני','יולי','אוג׳','ספט׳','אוק׳','נוב׳','דצמ׳'];
   return weights.map((weight, index) => ({ month: months[index], value: report.annualProduction * weight }));
 }
 
 function projectionValue(year, report, config) {
   const growth = Number(config?.yearlyTariffGrowth ?? 0.04);
-  const base = -report.cost;
-  return base + report.annualSavings * year * Math.pow(1 + growth, Math.max(0, year - 1) / 2);
+  let total = -report.cost;
+  for (let i = 0; i < year; i += 1) total += report.annualSavings * Math.pow(1 + growth, i);
+  return total;
 }
 
-function investmentOption(name, factor, report, config, formatMoney) {
+function buildPlan(name, factor, report, money, recommended = false) {
   const systemKw = Math.max(1, report.systemKw * factor);
   const cost = Math.max(0, report.cost * factor);
-  const annual = Math.max(0, report.annualSavings * factor * (factor > 1 ? 1.04 : 0.98));
-  const payback = cost / Math.max(annual, 1);
-  return {
-    name,
-    factor,
-    systemKw,
-    cost,
-    annual,
-    payback,
-    profit25: annual * 25 - cost,
-    money: formatMoney,
-    recommended: Math.abs(factor - 1) < 0.01,
-  };
+  const annual = Math.max(0, report.annualSavings * factor * (factor > 1 ? 1.03 : 0.97));
+  return { name, systemKw, cost, annual, payback: cost / Math.max(annual, 1), recommended, money };
 }
 
-function investmentCard(option) {
-  return `<div class="plan ${option.recommended ? 'recommended' : ''}"><div class="badge">${option.recommended ? 'המסלול המומלץ' : 'מסלול בחירה'}</div><h3>${option.name}</h3><strong>${option.systemKw.toFixed(1)} kW</strong><ul><li>עלות משוערת: ${option.money(option.cost)}</li><li>חיסכון שנתי: ${option.money(option.annual)}</li><li>החזר השקעה: ${option.payback.toFixed(1)} שנים</li><li>רווח 25 שנה: ${option.money(option.profit25)}</li></ul></div>`;
+function planCard(plan) {
+  return `<div class="card plan ${plan.recommended ? 'recommended' : ''}">
+    ${plan.recommended ? '<div class="tagRec">המומלץ ביותר</div>' : ''}
+    <div class="icon">${iconHomeSun()}</div>
+    <h3>${plan.name}</h3>
+    <div class="desc">${plan.recommended ? 'האיזון הנכון בין חיסכון לתפוקה לאורך זמן' : plan.name === 'בסיס' ? 'מערכת קטנה להתחלה חכמה' : 'מערכת מורחבת מוכנה לעתיד'}</div>
+    <ul><li>מערכת של ${plan.systemKw.toFixed(1)} kW</li><li>חיסכון שנתי: ${plan.money(plan.annual)}</li><li>החזר: ${plan.payback.toFixed(1)} שנים</li></ul>
+    <div>החל מ‑</div><div class="price">${plan.money(plan.cost)}</div>
+  </div>`;
 }
 
-function roofDrawing(state, score) {
+function metricCard(label, value, icon) {
+  return `<div class="card metric"><div class="ico">${icon}</div><div class="label">${label}</div><div class="value">${value}</div></div>`;
+}
+
+function sideMetric(label, value, icon) {
+  return `<div class="card sideMetric"><div class="ico">${icon}</div><div><small>${label}</small><b>${value}</b></div></div>`;
+}
+
+function financeMetric(label, value, icon) {
+  return `<div class="card finMetric"><div class="metricIcon">${icon}</div><div class="label">${label}</div><div class="value">${value}</div></div>`;
+}
+
+function featureCard(title, value, text) {
+  return `<div class="card feature"><b>${title}</b><span>${value}</span><span>${text}</span></div>`;
+}
+
+function trustCard(title, text, icon) {
+  return `<div class="card trust"><div class="ico">${icon}</div><b>${title}</b><span>${text}</span></div>`;
+}
+
+function timelineStep(number, title, text) {
+  return `<div class="step"><i>${number}</i><b>${title}</b><span>${text}</span></div>`;
+}
+
+function bottomFooter() {
+  return `<div class="bottomWave"></div><div class="bottomFeatures">
+    <div class="bf">${iconWallet()}<span>חיסכון שמתאים לכם</span></div>
+    <div class="bf">${iconLeaf()}<span>ייצור נקי</span></div>
+    <div class="bf">${iconShield()}<span>ביטחון אנרגטי</span></div>
+  </div>`;
+}
+
+function mainRoofDirection(state) {
   const surfaces = Array.isArray(state.surfaces) ? state.surfaces : [];
-  const polygons = surfaces.length ? surfaces.map((surface, index) => `<polygon points="${escapeAttribute(surface.points || '')}" fill="rgba(245,161,26,${index === 0 ? '.82' : '.62'})" stroke="#fff" stroke-width="1.5"/>`).join('') : '<polygon points="17,58 77,42 86,78 24,88" fill="rgba(245,161,26,.76)" stroke="#fff" stroke-width="1.6"/>';
-  const pins = (Array.isArray(state.obstacles) ? state.obstacles : []).map((_, i) => {
-    const c = [[42,36],[66,56],[72,28],[35,64],[58,24]][i % 5];
-    return `<circle cx="${c[0]}" cy="${c[1]}" r="3.8" fill="#fff" stroke="#f5a11a" stroke-width="1.4"/>`;
-  }).join('');
-  return `<svg viewBox="0 0 100 100" role="img" aria-label="Digital roof preview"><defs><pattern id="roofGrid" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M8 0 L0 0 0 8" fill="none" stroke="rgba(255,255,255,.12)"/></pattern><filter id="softShadow"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity=".22"/></filter></defs><rect width="100" height="100" fill="#071b2f"/><rect width="100" height="100" fill="url(#roofGrid)"/><path d="M12 14 L86 9 L92 82 L18 90 Z" fill="rgba(255,255,255,.08)" stroke="rgba(255,255,255,.34)"/><g filter="url(#softShadow)">${polygons}</g>${pins}<path d="M8 20 L25 36 M7 42 L28 50 M11 65 L31 61" stroke="rgba(255,211,106,.42)" stroke-width="1"/><text x="8" y="12" fill="#ffd36a" font-size="5" font-weight="900">SCORE ${score.score}</text></svg>`;
-}
-
-function solarPlaneSvg() {
-  return `<svg viewBox="0 0 900 180" preserveAspectRatio="none"><defs><linearGradient id="panelG" x1="0" x2="1"><stop offset="0" stop-color="#153c63"/><stop offset="1" stop-color="#071b2f"/></linearGradient></defs><path d="M80 124 L385 48 L812 118 L545 162 Z" fill="rgba(255,255,255,.06)" stroke="rgba(255,255,255,.24)"/><g transform="translate(126 58) skewX(-17)"><rect width="590" height="74" rx="10" fill="url(#panelG)" stroke="rgba(255,255,255,.34)"/><g stroke="rgba(255,255,255,.28)">${Array.from({ length: 9 }).map((_, i) => `<path d="M${65 * (i + 1)} 0 V74"/>`).join('')}${Array.from({ length: 3 }).map((_, i) => `<path d="M0 ${18 * (i + 1)} H590"/>`).join('')}</g></g><circle cx="758" cy="48" r="28" fill="#ffd36a" opacity=".95"/><path d="M730 48 H680 M786 48 H840 M758 20 V0 M758 76 V115" stroke="#ffd36a" stroke-width="5" stroke-linecap="round" opacity=".7"/></svg>`;
+  if (!surfaces.length) return 'דרום‑מערב';
+  const best = surfaces.reduce((a, b) => Number(a.area || 0) > Number(b.area || 0) ? a : b, surfaces[0]);
+  return best.orientation || 'דרום‑מערב';
 }
 
 function obstacleNames(obstacles) {
   const map = { ac: 'מזגן', boiler: 'דוד', shade: 'צל', access: 'יציאה לגג', solar: 'קולטים קיימים' };
   return obstacles.map((item) => map[item] || item).filter(Boolean).join(', ');
+}
+
+function repeat(value, count) {
+  return Array.from({ length: count }).map(() => value).join('');
 }
 
 function escapeHtml(value) {
@@ -239,11 +515,22 @@ function digitsOnly(value) {
   return String(value).replace(/\D/g, '');
 }
 
-function iconPanels() { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16l-2 10H2L4 7Z"/><path d="M8 7l-1 10M13 7v10M18 7l-1 10M3 12h16"/></svg>'; }
-function iconInverter() { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="4" width="14" height="16" rx="2"/><path d="M9 8h6M9 12h6M10 16h4"/></svg>'; }
-function iconBattery() { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="7" width="15" height="10" rx="2"/><path d="M19 10h2v4h-2M8 12h7"/></svg>'; }
-function iconGrid() { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v18M5 8h14M7 16h10M4 21h16"/></svg>'; }
-function iconShield() { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l7 3v6c0 5-3.5 8-7 9-3.5-1-7-4-7-9V6l7-3Z"/><path d="M9 12l2 2 4-5"/></svg>'; }
-function iconDesign() { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/></svg>'; }
-function iconMonitor() { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="5" width="16" height="11" rx="2"/><path d="M9 21h6M12 16v5"/></svg>'; }
-function iconDocs() { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v5h5M10 13h6M10 17h5"/></svg>'; }
+function svg(paths) { return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`; }
+function iconPanel() { return svg('<path d="M4 8h16l-2 9H2l2-9Z"/><path d="M8 8l-1 9M13 8v9M18 8l-1 9M3 13h16"/>'); }
+function iconSun() { return svg('<circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.5 4.5l2 2M17.5 17.5l2 2M19.5 4.5l-2 2M6.5 17.5l-2 2"/>'); }
+function iconPiggy() { return svg('<path d="M5 12a6 5 0 0 1 6-5h4a4 4 0 0 1 4 4v5h-2l-1 3h-3l-1-2H9l-1 2H5l1-3H4v-4h1Z"/><path d="M15 9h.01M8 7l-2-2"/>'); }
+function iconHome() { return svg('<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>'); }
+function iconCycle() { return svg('<path d="M17 1v6h-6"/><path d="M20 11a8 8 0 0 0-14-5l-2 2"/><path d="M7 23v-6h6"/><path d="M4 13a8 8 0 0 0 14 5l2-2"/>'); }
+function iconGrowth() { return svg('<path d="M4 19V5"/><path d="M4 19h16"/><path d="M7 15l4-4 3 3 5-7"/><path d="M17 7h2v2"/>'); }
+function iconSunPanel() { return svg('<path d="M4 14h16l-2 6H2l2-6Z"/><path d="M8 14l-1 6M13 14v6M18 14l-1 6M3 17h16"/><circle cx="12" cy="6" r="3"/><path d="M12 1v2M12 9v2M7 6H5M19 6h-2"/>'); }
+function iconCompass() { return svg('<circle cx="12" cy="12" r="9"/><path d="M15 9l-2 6-4 2 2-6 4-2Z"/>'); }
+function iconObstacle() { return svg('<path d="M4 18h16"/><path d="M6 18V9a3 3 0 0 1 3-3h1"/><path d="M14 18V8h4v10"/><path d="M8 6V3h4v3"/>'); }
+function iconFamily() { return svg('<path d="M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M17 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M14 20a4 4 0 0 1 7 0"/>'); }
+function iconPin() { return svg('<path d="M12 21s7-5.5 7-12a7 7 0 1 0-14 0c0 6.5 7 12 7 12Z"/><circle cx="12" cy="9" r="2"/>'); }
+function iconHomeSun() { return svg('<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/><circle cx="18" cy="5" r="2"/>'); }
+function iconSearchHome() { return svg('<path d="M4 11l7-6 7 6"/><path d="M6 10v8h8v-4h-3v4"/><circle cx="17" cy="17" r="3"/><path d="M20 20l2 2"/>'); }
+function iconDesign() { return svg('<path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/><path d="M16 16l4 4"/>'); }
+function iconCheck() { return svg('<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>'); }
+function iconShield() { return svg('<path d="M12 3l7 3v6c0 5-3.5 8-7 9-3.5-1-7-4-7-9V6l7-3Z"/><path d="M9 12l2 2 4-5"/>'); }
+function iconWallet() { return svg('<path d="M4 7h14a2 2 0 0 1 2 2v9H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h12"/><path d="M16 12h4v4h-4z"/>'); }
+function iconLeaf() { return svg('<path d="M20 4C11 4 5 10 5 19c9 0 15-6 15-15Z"/><path d="M5 19c3-5 7-8 12-10"/>'); }
