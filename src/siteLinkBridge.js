@@ -32,6 +32,11 @@ function isCalculatorPage() {
   return /\/roof-check\/?$/.test(window.location.pathname) || /\/roof-check\//.test(window.location.pathname);
 }
 
+function isHomePage() {
+  const path = window.location.pathname.replace(/\/index\.html$/, '/');
+  return path.endsWith('/roof-check-by-solatrix/') || path === '/' || path.endsWith('/');
+}
+
 function siteRootUrl() {
   const path = window.location.pathname;
   const marker = '/roof-check-by-solatrix/';
@@ -52,6 +57,53 @@ function textMatches(text = '', patterns = calculatorKeywords) {
 
 function hrefMatchesCalculator(href = '') {
   return /roof-check\.html/i.test(href) || /#.*roof/i.test(href) || /#.*גג/i.test(href);
+}
+
+function injectDecisionBlockStyles() {
+  if (document.getElementById('solatrix-decision-block-v2-style')) return;
+  const style = document.createElement('style');
+  style.id = 'solatrix-decision-block-v2-style';
+  style.textContent = `
+    #decision .decision-grid-v2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:26px 0 22px}
+    #decision .decision-card-v2{background:#fff;border:1px solid var(--line);border-radius:26px;padding:24px 24px 22px;box-shadow:0 18px 46px rgba(42,33,24,.06)}
+    #decision .decision-card-v2 span{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:15px;background:#fff3df;color:#a76200;font-size:22px;font-weight:950;margin-bottom:14px}
+    #decision .decision-card-v2 h3{font-size:24px;line-height:1.12;margin:0 0 10px;color:#17120d;letter-spacing:-.018em}
+    #decision .decision-card-v2 p{font-size:18px;line-height:1.55;margin:0;color:#5f564c;font-weight:700}
+    #decision .decision-bottom-v2{display:grid;gap:16px;margin-top:20px}
+    #decision .decision-bottom-v2 .soft-note{font-size:19px;line-height:1.55}
+    #decision .decision-cta-v2{display:inline-flex;align-items:center;justify-content:center;width:max-content;max-width:100%;border-radius:999px;padding:15px 26px;background:linear-gradient(135deg,var(--orange),var(--orange2));color:#16100a;font-weight:950;text-decoration:none;box-shadow:0 16px 34px rgba(245,161,26,.22)}
+    @media(max-width:900px){#decision .decision-grid-v2{grid-template-columns:1fr}#decision .decision-card-v2{padding:22px}#decision .decision-cta-v2{width:100%}}
+  `;
+  document.head.appendChild(style);
+}
+
+function replaceDecisionBlock() {
+  if (!isHomePage()) return;
+  const section = document.getElementById('decision');
+  if (!section || section.dataset.solatrixDecisionV2 === 'true') return;
+  section.dataset.solatrixDecisionV2 = 'true';
+  injectDecisionBlockStyles();
+  section.innerHTML = `
+    <div class="container statement-grid">
+      <div class="sticky-title">
+        <div class="kicker dark">הסיבה האמיתית לגגות הריקים</div>
+        <h2>למה אנשים עדיין לא שמים מערכת סולארית, גם כשהמספרים נראים טוב?</h2>
+      </div>
+      <div class="statement-card">
+        <p>ברוב המקרים זה לא בגלל שהשמש לא מספיקה. זה בגלל שאין תשובות ברורות לשאלות שבאמת קובעות אם כדאי להתקדם.</p>
+        <div class="decision-grid-v2">
+          <div class="decision-card-v2"><span>01</span><h3>כמה הגג שלי באמת יכול לייצר?</h3><p>לא לפי ניחוש כללי — אלא לפי שטח, כיוון, הצללות ומבנה הגג.</p></div>
+          <div class="decision-card-v2"><span>02</span><h3>מה המחיר האמיתי של מערכת כזו?</h3><p>לא “נחזור אליכם עם הצעה”, אלא להבין כבר בהתחלה סדרי גודל.</p></div>
+          <div class="decision-card-v2"><span>03</span><h3>תוך כמה זמן ההשקעה חוזרת?</h3><p>לא רק כמה פאנלים נכנסים, אלא כמה כסף זה באמת חוסך או מייצר.</p></div>
+          <div class="decision-card-v2"><span>04</span><h3>האם ההצעה שקיבלתי הגיונית?</h3><p>כדי לדעת אם המחיר, ההספק והציוד באמת מתאימים לנכס שלכם.</p></div>
+        </div>
+        <div class="decision-bottom-v2">
+          <div class="soft-note">בדיוק בשביל זה בנינו את Solatrix: קודם לראות את התמונה, אחר כך לקבל החלטה.</div>
+          <a class="decision-cta-v2" href="${calculatorUrl()}">בדקו את הגג שלכם</a>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function connectRoofCheckLinks() {
@@ -85,8 +137,13 @@ function connectRoofCheckLinks() {
   });
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', connectRoofCheckLinks);
-} else {
+function initSolatrixSiteLinks() {
+  replaceDecisionBlock();
   connectRoofCheckLinks();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initSolatrixSiteLinks);
+} else {
+  initSolatrixSiteLinks();
 }
