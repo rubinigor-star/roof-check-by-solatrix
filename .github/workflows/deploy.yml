@@ -32,6 +32,16 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Copy beta pages
+        run: |
+          if [ -d "beta" ]; then
+            mkdir -p dist/beta
+            cp -R beta/* dist/beta/
+            echo "Copied beta pages into dist/beta"
+          else
+            echo "No beta directory to copy"
+          fi
+
       - name: Inject homepage decision block override
         run: |
           python3 - <<'PY'
