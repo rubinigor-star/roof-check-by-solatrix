@@ -3,201 +3,40 @@ import './router.css';
 import { buildFullPdfReport } from './pdfReport.js';
 import { getLeads, saveLead, updateLeadStatus, LEAD_STATUSES } from './leadsStore.js';
 
-function resolveBasePath() {
-  const marker = '/roof-check';
-  const pathname = window.location.pathname || marker;
-  const index = pathname.indexOf(marker);
-  return index >= 0 ? pathname.slice(0, index + marker.length) : marker;
-}
-
-const BASE_PATH = resolveBasePath();
-const SITE_ROOT = `${BASE_PATH.replace(/\/roof-check$/, '') || ''}/`;
-const CONFIG = {
-  productionPerKw: 1650,
-  buyRate: 0.64,
-  sellRate: 0.48,
-  installCostPerKw: 2900,
-  sqmPerKw: 7,
-  panelKw: 0.63,
-  usableRoofFactor: 0.82,
-  defaultPhone: '972547299727'
-};
-const LOGO_SRC = 'https://static.wixstatic.com/media/e34422_f461fb2e8382455e8d0d7ba9d71eca1e~mv2.png/v1/fill/w_298,h_194,al_c,q_90,enc_avif,quality_auto/Solatrix%20Logo%20Sait%20Main.png';
-const ROUTES = [
-  { step: 0, slug: '', label: 'ראשי', title: 'בדיקת גג חכמה | Solatrix' },
-  { step: 1, slug: 'address', label: 'כתובת וחשבון', title: 'כתובת וחשבון חשמל | Solatrix' },
-  { step: 2, slug: 'roof-type', label: 'סוג גג', title: 'בחירת סוג גג | Solatrix' },
-  { step: 3, slug: 'roof-marking', label: 'סימון גג', title: 'סימון גג | Solatrix' },
-  { step: 4, slug: 'obstacles', label: 'מכשולים', title: 'מכשולים על הגג | Solatrix' },
-  { step: 5, slug: 'analysis', label: 'ניתוח', title: 'ניתוח התאמה | Solatrix' },
-  { step: 6, slug: 'report', label: 'דוח', title: 'דוח ראשוני | Solatrix' },
-  { step: 7, slug: 'admin', label: 'Admin', title: 'Solatrix CRM' }
-];
-const byStep = new Map(ROUTES.map((route) => [route.step, route]));
-const byPath = new Map(ROUTES.map((route) => [pathForSlug(route.slug), route]));
-const shapePresets = [
-  { points: '17,58 77,42 86,78 24,88', area: 74, orientation: 'South', factor: 1 },
-  { points: '14,18 48,10 52,36 16,46', area: 36, orientation: 'East', factor: 0.88 },
-  { points: '58,14 86,18 80,38 56,34', area: 22, orientation: 'West', factor: 0.82 },
-  { points: '28,42 55,35 63,58 35,66', area: 29, orientation: 'South-East', factor: 0.94 },
-  { points: '48,62 82,56 86,77 52,84', area: 31, orientation: 'South-West', factor: 0.9 }
-];
-const state = {
-  step: routeFromLocation().step,
-  address: '',
-  monthlyBill: 850,
-  roofType: '',
-  leadName: '',
-  leadPhone: '',
-  surfaces: [],
-  obstacles: [],
-  leadSent: false,
-  menuOpen: false,
-  analysisTimer: null,
-  selectedLeadId: null
-};
-
-function pathForSlug(slug) { return slug ? `${BASE_PATH}/${slug}` : `${BASE_PATH}/`; }
-function pathForStep(step) { return pathForSlug(byStep.get(step)?.slug || ''); }
-function normalizedPath() {
-  let path = window.location.pathname || BASE_PATH;
-  path = path.replace(/\/index\.html$/, '/').replace(/\/404\.html$/, '/');
-  if (path === BASE_PATH) path = `${BASE_PATH}/`;
-  return path.replace(/\/$/, '') === BASE_PATH ? `${BASE_PATH}/` : path.replace(/\/$/, '');
-}
-function routeFromLocation() {
-  if (window.location.hash === '#admin') return byStep.get(7);
-  return byPath.get(normalizedPath()) || byStep.get(0);
-}
-function updateDocumentTitle() { document.title = byStep.get(state.step)?.title || 'בדיקת גג חכמה | Solatrix'; }
-function navigateToStep(step, { replace = false } = {}) {
-  const nextStep = Math.max(0, Math.min(7, Number(step)));
-  const nextPath = pathForStep(nextStep);
-  state.step = nextStep;
-  state.menuOpen = false;
-  updateDocumentTitle();
-  if (window.location.pathname !== nextPath) {
-    window.history[replace ? 'replaceState' : 'pushState']({ step: nextStep }, '', nextPath);
-  }
-}
-function setStep(step, options = {}) {
-  clearTimeout(state.analysisTimer);
-  navigateToStep(step, options);
-  render();
-  if (state.step === 5) state.analysisTimer = setTimeout(() => setStep(6), 1200);
-}
-function formatNumber(value) { return Math.round(value).toLocaleString('he-IL'); }
-function formatMoney(value) { return '₪' + formatNumber(value); }
-function createSurface(index) { return { id: index + 1, name: `Side ${index + 1}`, ...shapePresets[index % shapePresets.length] }; }
-function calculateSurface(surface) {
-  const usableArea = Math.max(surface.area * CONFIG.usableRoofFactor, 0);
-  const kw = usableArea / CONFIG.sqmPerKw;
-  return { usableArea, kw, panels: Math.max(Math.floor(kw / CONFIG.panelKw), 1) };
-}
-function ensureDefaultSurface() { if (!state.surfaces.length) state.surfaces = [createSurface(0)]; }
-function calculateReport() {
-  ensureDefaultSurface();
-  const systemKw = state.surfaces.reduce((sum, surface) => sum + calculateSurface(surface).kw, 0);
-  const weightedFactor = state.surfaces.reduce((sum, surface) => sum + surface.factor * calculateSurface(surface).kw, 0) / Math.max(systemKw, 1);
-  const annualProduction = systemKw * CONFIG.productionPerKw * weightedFactor;
-  const annualConsumption = (Number(state.monthlyBill || 0) * 12) / CONFIG.buyRate;
-  const selfConsumed = Math.min(annualProduction * 0.45, annualConsumption);
-  const exported = Math.max(annualProduction - selfConsumed, 0);
-  const annualSavings = selfConsumed * CONFIG.buyRate + exported * CONFIG.sellRate;
-  const effectiveTariff = annualSavings / Math.max(annualProduction, 1);
-  const selfUseShare = selfConsumed / Math.max(annualProduction, 1) * 100;
-  const cost = systemKw * CONFIG.installCostPerKw;
-  const payback = cost / Math.max(annualSavings, 1);
-  const profit25 = annualSavings * 25 - cost;
-  const panels = state.surfaces.reduce((sum, surface) => sum + calculateSurface(surface).panels, 0);
-  const roofArea = state.surfaces.reduce((sum, surface) => sum + surface.area, 0);
-  const usableArea = state.surfaces.reduce((sum, surface) => sum + calculateSurface(surface).usableArea, 0);
-  return { systemKw, annualProduction, annualConsumption, selfConsumed, exported, annualSavings, effectiveTariff, selfUseShare, cost, payback, profit25, panels, roofArea, usableArea };
-}
-function saveCurrentLead(report = calculateReport()) {
-  return saveLead({
-    name: state.leadName || 'ללא שם', phone: state.leadPhone || '', address: state.address || '', monthlyBill: state.monthlyBill,
-    roofType: state.roofType, surfaces: state.surfaces, obstacles: state.obstacles,
-    systemKw: report.systemKw, annualProduction: report.annualProduction, annualSavings: report.annualSavings, payback: report.payback, profit25: report.profit25,
-    status: 'חדש'
-  });
-}
-function logo() { return `<div class="logoMark" aria-label="Solatrix Energy"><img class="logoImage" src="${LOGO_SRC}" alt="Solatrix Energy" loading="eager" /></div>`; }
-function routeLink(step) { return `href="${pathForStep(step)}" data-action="step:${step}"`; }
-function header() {
-  const menuItems = [0, 1, 2, 3, 4, 6].map((step) => `<a ${routeLink(step)} class="${state.step === step ? 'active' : ''}">${byStep.get(step).label}</a>`).join('');
-  return `<header class="siteHeader ${state.menuOpen ? 'menuOpen' : ''}"><div class="headerInner"><a class="brand" href="${SITE_ROOT}">${logo()}</a><div class="headerActions"><a class="headerCta" href="https://wa.me/${CONFIG.defaultPhone}" target="_blank" rel="noreferrer">WhatsApp</a><button class="menuBtn" data-action="toggleMenu" aria-label="Menu">${state.menuOpen ? '×' : '☰'}</button></div></div><nav class="mobileMenu">${menuItems}<a href="${SITE_ROOT}">לאתר הראשי</a><a href="https://wa.me/${CONFIG.defaultPhone}" target="_blank" rel="noreferrer">WhatsApp</a></nav></header>`;
-}
-function progress() { return state.step === 0 || state.step === 7 ? '' : `<div class="progressDots">${[1,2,3,4,5,6].map((step) => `<span class="${step <= state.step ? 'done' : ''}"></span>`).join('')}</div>`; }
-function cardDecor() { return `<div class="cardDecor" aria-hidden="true"><i></i><i></i><i></i></div>`; }
-function floatingDecor() { return `<div class="floatingDecor" aria-hidden="true"><span>☀️</span><span>⚡</span><span>🏠</span><span>📍</span></div>`; }
-function actions(primary) { return `<div class="actions"><button class="primaryBtn" data-action="next">${primary}</button>${state.step > 1 ? '<button class="ghostBtn" data-action="prev">חזרה</button>' : ''}</div>`; }
-function mapMock(interactive = false) {
-  const surfaceShapes = state.surfaces.map((surface, index) => `<polygon class="surface ${index === state.surfaces.length - 1 ? 'active' : ''}" points="${surface.points}"></polygon>`).join('');
-  const pins = state.obstacles.map((_, index) => { const c = [[42,36], [66,56], [72,28], [35,64], [58,24]][index % 5]; return `<circle cx="${c[0]}" cy="${c[1]}" r="3.8"></circle>`; }).join('');
-  return `<div class="mapPanel ${interactive ? 'interactiveMap' : ''}" ${interactive ? 'data-action="markRoof"' : ''}><div class="mapBadge">${state.surfaces.length ? 'Roof marked' : 'Tap to mark'}</div><div class="scanPulse"></div><svg class="roofCanvas" viewBox="0 0 100 100"><defs><pattern id="grid" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M 8 0 L 0 0 0 8" fill="none" /></pattern></defs><rect x="0" y="0" width="100" height="100" class="mapBase"></rect><rect x="0" y="0" width="100" height="100" fill="url(#grid)" class="mapGrid"></rect><path class="sunRay" d="M5 15 L35 42 M4 38 L34 52 M12 60 L42 62"></path><path class="building" d="M12 14 L86 9 L92 82 L18 90 Z"></path>${surfaceShapes}<g class="obstaclePins">${pins}</g></svg></div>`;
-}
-function heroScreen() { return `<section class="screen heroScreen">${floatingDecor()}<div class="heroGrid"><div class="card centerCard heroCard">${cardDecor()}<div class="eyebrow">Roof Check by Solatrix</div><h1>בדיקת גג סולארית</h1><p class="heroText">תוך דקה מקבלים הערכה ראשונית: שטח שימושי, כמות פאנלים, ייצור שנתי ורווח צפוי.</p><div class="featureChips"><span>☀️ חישוב מהיר</span><span>📍 לפי כתובת</span><span>📄 דוח PDF מלא</span></div><button class="primaryBtn large" data-action="next">התחילו בדיקת גג</button></div><div class="visualCard"><div class="orbit orbitOne"></div><div class="orbit orbitTwo"></div><div class="miniRoof"><div class="roofTop"></div><div class="panelRows"><span></span><span></span><span></span><span></span></div></div><div class="visualStats"><b>PDF</b><span>דוח מלא</span></div><div class="visualStats second"><b>☀️</b><span>חישוב מהיר</span></div></div></div></section>`; }
-function addressScreen() { return `<section class="screen">${floatingDecor()}<div class="card focusCard">${cardDecor()}${progress()}<div class="screenIcon">📍</div><h2>כתובת וחשבון חשמל</h2><p class="subText">החשבון החודשי עוזר לחשב כמה מהייצור יחסוך קנייה ב־₪${CONFIG.buyRate} וכמה יימכר ב־₪${CONFIG.sellRate}.</p><div class="fieldGroup"><label>כתובת הגג</label><input value="${state.address}" placeholder="לדוגמה: החרמון 10, חיפה" data-field="address" /></div><div class="fieldGroup"><label>חשבון חשמל חודשי משוער</label><input value="${state.monthlyBill}" inputmode="numeric" data-field="monthlyBill" /></div>${actions('מצא את הגג')}</div></section>`; }
-function roofScreen() { return `<section class="screen">${floatingDecor()}<div class="card focusCard">${cardDecor()}${progress()}<div class="screenIcon">🏠</div><h2>איזה סוג גג?</h2><div class="roofOptions"><button class="roofOption ${state.roofType === 'flat' ? 'selected' : ''}" data-action="roof:flat"><span>▰</span><b>גג שטוח</b><small>הכי פשוט לסימון מהיר</small></button><button class="roofOption ${state.roofType === 'sloped' ? 'selected' : ''}" data-action="roof:sloped"><span>◭</span><b>גג לא אחיד / כמה צדדים</b><small>נסמן כל צד בנפרד</small></button><button class="roofOption ${state.roofType === 'commercial' ? 'selected' : ''}" data-action="roof:commercial"><span>▦</span><b>גג מסחרי</b><small>שטח גדול, פוטנציאל גבוה</small></button></div>${actions('המשך לסימון')}</div></section>`; }
-function drawScreen() { const count = state.surfaces.length; const isSloped = state.roofType === 'sloped'; return `<section class="screen mapScreen"><div class="card mapCard">${cardDecor()}${progress()}<div class="screenIcon">✏️</div><h2>${isSloped ? 'סמנו כל צד של הגג' : 'סמנו את שטח הגג'}</h2>${mapMock(true)}<div class="markStatus">${count ? `סומנו ${count} שטחי גג` : 'עדיין לא סומן שטח. לחצו על המפה או על הכפתור.'}</div><div class="drawFooter"><div class="actions compactActions"><button class="primaryBtn" data-action="markRoof">${isSloped ? '+ סמן צד נוסף' : 'סמן גג'}</button>${count > 0 ? '<button class="ghostBtn" data-action="removeSide">בטל אחרון</button>' : ''}</div><button class="nextTextBtn" data-action="next" ${count === 0 ? 'disabled' : ''}>סיימתי</button></div></div></section>`; }
-function obstaclesScreen() { const items = [['ac','מזגן','❄️'],['boiler','דוד','💧'],['shade','צל','🌳'],['access','יציאה לגג','🚪'],['solar','קולטים קיימים','☀️']]; return `<section class="screen mapScreen"><div class="card mapCard">${cardDecor()}${progress()}<div class="screenIcon">🧩</div><h2>מה נמצא על הגג?</h2>${mapMock()}<div class="obstacleGrid">${items.map(([key,label,icon]) => `<button class="obstacle ${state.obstacles.includes(key) ? 'selected' : ''}" data-action="obstacle:${key}"><span>${icon}</span>${label}</button>`).join('')}</div>${actions('המשך')}</div></section>`; }
-function analysisScreen() { return `<section class="screen">${floatingDecor()}<div class="card centerCard analysisCard">${cardDecor()}<div class="loader"></div><h2>מנתחים את הגג...</h2><p class="subText">בודקים שטח שימושי, כיוונים, צריכה עצמית, מכירה לרשת והחזר השקעה.</p><div class="analysisBadges"><span>שטח</span><span>ייצור</span><span>תעריף משולב</span><span>ROI</span></div></div></section>`; }
-function tariffMix(report) { const selfWidth = Math.max(8, Math.min(92, report.selfUseShare)); const exportWidth = Math.max(8, 100 - selfWidth); return `<div class="tariffMix"><div class="mixHead"><b>תמהיל חיסכון ומכירה</b><span>תעריף אפקטיבי: ₪${report.effectiveTariff.toFixed(2)} לקוט״ש</span></div><div class="mixBar"><i style="width:${selfWidth}%"></i><em style="width:${exportWidth}%"></em></div><div class="mixLegend"><span><i></i>צריכה עצמית: ${formatNumber(report.selfConsumed)} kWh לפי ₪${CONFIG.buyRate}</span><span><em></em>מכירה לרשת: ${formatNumber(report.exported)} kWh לפי ₪${CONFIG.sellRate}</span></div></div>`; }
-function reportScreen() { const report = calculateReport(); return `<section class="screen reportScreen">${floatingDecor()}<div class="card reportCard">${cardDecor()}<div class="eyebrow">דוח סולארי ראשוני</div><h2>הגג מתאים למערכת של כ-${report.systemKw.toFixed(1)} kW</h2><div class="reportHeroGraphic"><div><strong>${formatMoney(report.annualSavings)}</strong><span>חיסכון/הכנסה שנתית משוערת</span></div><div class="sparkLine"><i style="height:36%"></i><i style="height:54%"></i><i style="height:68%"></i><i style="height:80%"></i><i style="height:92%"></i></div></div>${tariffMix(report)}<div class="resultsGrid"><div><span>שטח גג</span><b>${formatNumber(report.roofArea)} m²</b></div><div><span>שטח שימושי</span><b>${formatNumber(report.usableArea)} m²</b></div><div><span>פאנלים</span><b>${report.panels}</b></div><div><span>ייצור שנתי</span><b>${formatNumber(report.annualProduction)} kWh</b></div><div><span>חיסכון/הכנסה שנתית</span><b>${formatMoney(report.annualSavings)}</b></div><div><span>החזר השקעה</span><b>${report.payback.toFixed(1)} שנים</b></div><div><span>רווח 25 שנים</span><b>${formatMoney(report.profit25)}</b></div></div><div class="leadFields"><input placeholder="שם מלא" value="${state.leadName}" data-field="leadName" /><input placeholder="טלפון WhatsApp" value="${state.leadPhone}" data-field="leadPhone" /></div><button class="primaryBtn large" data-action="generatePdf">קבלו דוח PDF מלא</button>${state.leadSent ? '<div class="successToast">הדוח נפתח והפנייה נשמרה.</div>' : ''}</div></section>`; }
-function adminScreen() {
-  const leads = getLeads();
-  const selected = state.selectedLeadId ? leads.find((lead) => lead.id === state.selectedLeadId) : leads[0];
-  const cards = [['סה״כ לידים', leads.length], ['חדשים', leads.filter((lead) => lead.status === 'חדש').length], ['סיורים', leads.filter((lead) => lead.status === 'נקבע סיור').length], ['עסקאות', leads.filter((lead) => lead.status === 'עסקה').length]];
-  return `<section class="screen adminScreen"><div class="card adminCard">${cardDecor()}<div class="eyebrow">Solatrix CRM</div><h2>לוח בקרה לידים</h2><div class="adminStats">${cards.map(([label,value]) => `<div><span>${label}</span><b>${value}</b></div>`).join('')}</div><div class="adminLayout"><div class="leadsTable"><table><thead><tr><th>שם</th><th>טלפון</th><th>כתובת</th><th>מערכת</th><th>סטטוס</th></tr></thead><tbody>${leads.length ? leads.map((lead) => `<tr data-action="selectLead:${lead.id}"><td>${lead.name}</td><td>${lead.phone || '-'}</td><td>${lead.address || '-'}</td><td>${Number(lead.systemKw || 0).toFixed(1)} kW</td><td>${lead.status}</td></tr>`).join('') : '<tr><td colspan="5">אין עדיין לידים. צור דוח PDF כדי לשמור ליד ראשון.</td></tr>'}</tbody></table></div>${selected ? `<div class="leadDetail"><h3>${selected.name}</h3><p>${selected.address || 'אין כתובת'}<br/>${selected.phone || 'אין טלפון'}</p><div class="resultsGrid"><div><span>מערכת</span><b>${Number(selected.systemKw || 0).toFixed(1)} kW</b></div><div><span>חיסכון שנתי</span><b>${formatMoney(selected.annualSavings || 0)}</b></div><div><span>החזר</span><b>${Number(selected.payback || 0).toFixed(1)} שנים</b></div></div><label class="fieldGroup"><span>סטטוס</span><select data-lead-status="${selected.id}">${LEAD_STATUSES.map((status) => `<option ${status === selected.status ? 'selected' : ''}>${status}</option>`).join('')}</select></label>${mapMock(false)}</div>` : ''}</div></div></section>`;
-}
-function generatePdfReport() {
-  const report = calculateReport();
-  saveCurrentLead(report);
-  const html = buildFullPdfReport({ report, state, config: CONFIG, logoSrc: LOGO_SRC, formatNumber, formatMoney });
-  const win = window.open('', '_blank');
-  if (!win) return;
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
-  state.leadSent = true;
-  render();
-}
-function renderScreen() {
-  if (state.step === 0) return heroScreen();
-  if (state.step === 1) return addressScreen();
-  if (state.step === 2) return roofScreen();
-  if (state.step === 3) return drawScreen();
-  if (state.step === 4) return obstaclesScreen();
-  if (state.step === 5) return analysisScreen();
-  if (state.step === 7) return adminScreen();
-  return reportScreen();
-}
-function handleAction(action, node) {
-  if (node.disabled) return;
-  if (action === 'toggleMenu') { state.menuOpen = !state.menuOpen; render(); }
-  if (action === 'closeMenu') { if (state.menuOpen) { state.menuOpen = false; render(); } }
-  if (action === 'next') setStep(state.step + 1);
-  if (action === 'prev') setStep(state.step - 1);
-  if (action === 'markRoof') { state.roofType === 'sloped' ? state.surfaces.push(createSurface(state.surfaces.length)) : state.surfaces = [createSurface(0)]; render(); }
-  if (action === 'removeSide') { state.surfaces.pop(); render(); }
-  if (action === 'generatePdf') generatePdfReport();
-  if (action && action.startsWith('step:')) setStep(Number(action.split(':')[1]));
-  if (action && action.startsWith('roof:')) { state.roofType = action.split(':')[1]; state.surfaces = []; render(); }
-  if (action && action.startsWith('obstacle:')) { const value = action.split(':')[1]; state.obstacles = state.obstacles.includes(value) ? state.obstacles.filter((item) => item !== value) : [...state.obstacles, value]; render(); }
-  if (action && action.startsWith('selectLead:')) { state.selectedLeadId = action.split(':')[1]; render(); }
-}
-function render() {
-  const root = document.getElementById('root');
-  root.innerHTML = `${header()}<main class="appShell" data-action="closeMenu">${renderScreen()}</main>`;
-  root.querySelectorAll('[data-action]').forEach((node) => node.addEventListener('click', (event) => {
-    const action = node.getAttribute('data-action');
-    if (action !== 'closeMenu') event.preventDefault();
-    handleAction(action, node);
-  }));
-  root.querySelectorAll('[data-field]').forEach((node) => node.addEventListener('input', () => { state[node.getAttribute('data-field')] = node.value; }));
-  root.querySelectorAll('[data-lead-status]').forEach((node) => node.addEventListener('change', () => { updateLeadStatus(node.getAttribute('data-lead-status'), node.value); render(); }));
-}
-window.addEventListener('popstate', () => { clearTimeout(state.analysisTimer); const route = routeFromLocation(); state.step = route.step; state.menuOpen = false; updateDocumentTitle(); render(); });
-navigateToStep(state.step, { replace: true });
-render();
+const CONFIG={productionPerKw:1650,buyRate:.64,sellRate:.48,installCostPerKw:2900,sqmPerKw:7,panelKw:.63,usableRoofFactor:.82,vatRate:.18,homeSystemLimitKw:22.5,defaultSelfUseShare:.4,electricityGrowthRate:.04,defaultPhone:'972547299727'};
+const LOGO_SRC='https://static.wixstatic.com/media/e34422_f461fb2e8382455e8d0d7ba9d71eca1e~mv2.png/v1/fill/w_298,h_194,al_c,q_90,enc_avif,quality_auto/Solatrix%20Logo%20Sait%20Main.png';
+function resolveBasePath(){const m='/roof-check',p=window.location.pathname||m,i=p.indexOf(m);return i>=0?p.slice(0,i+m.length):m}
+const BASE_PATH=resolveBasePath(),SITE_ROOT=`${BASE_PATH.replace(/\/roof-check$/,'')||''}/`;
+const ROUTES=[['','ראשי','בדיקת גג חכמה | Solatrix'],['address','כתובת וחשבון','כתובת וחשבון חשמל | Solatrix'],['roof-type','סוג גג','בחירת סוג גג | Solatrix'],['roof-marking','סימון גג','סימון גג | Solatrix'],['obstacles','מכשולים','מכשולים על הגג | Solatrix'],['analysis','ניתוח','ניתוח התאמה | Solatrix'],['report','דוח','דוח ראשוני | Solatrix'],['admin','Admin','Solatrix CRM']].map(([slug,label,title],step)=>({step,slug,label,title}));
+function pathForSlug(s){return s?`${BASE_PATH}/${s}`:`${BASE_PATH}/`} function pathForStep(s){return pathForSlug(ROUTES[s]?.slug||'')}
+const byPath=new Map(ROUTES.map(r=>[pathForSlug(r.slug).replace(/\/$/,'')===BASE_PATH?`${BASE_PATH}/`:pathForSlug(r.slug).replace(/\/$/,''),r]));
+function normalizedPath(){let p=window.location.pathname||BASE_PATH;p=p.replace(/\/index\.html$/,'/').replace(/\/404\.html$/,'/');if(p===BASE_PATH)p=`${BASE_PATH}/`;return p.replace(/\/$/,'')===BASE_PATH?`${BASE_PATH}/`:p.replace(/\/$/,'')}
+function routeFromLocation(){if(window.location.hash==='#admin')return ROUTES[7];return byPath.get(normalizedPath())||ROUTES[0]}
+const presets=[{points:'17,58 77,42 86,78 24,88',area:74,orientation:'South',factor:1},{points:'14,18 48,10 52,36 16,46',area:36,orientation:'East',factor:.88},{points:'58,14 86,18 80,38 56,34',area:22,orientation:'West',factor:.82},{points:'28,42 55,35 63,58 35,66',area:29,orientation:'South-East',factor:.94},{points:'48,62 82,56 86,77 52,84',area:31,orientation:'South-West',factor:.9}];
+const state={step:routeFromLocation().step,address:'',monthlyBill:850,roofType:'',leadName:'',leadPhone:'',surfaces:[],obstacles:[],leadSent:false,menuOpen:false,analysisTimer:null,selectedLeadId:null};
+function title(){document.title=ROUTES[state.step]?.title||'בדיקת גג חכמה | Solatrix'}
+function nav(step,{replace=false}={}){state.step=Math.max(0,Math.min(7,Number(step)));state.menuOpen=false;title();const p=pathForStep(state.step);if(window.location.pathname!==p)window.history[replace?'replaceState':'pushState']({step:state.step},'',p)}
+function setStep(s,o={}){clearTimeout(state.analysisTimer);nav(s,o);render();if(state.step===5)state.analysisTimer=setTimeout(()=>setStep(6),1200)}
+function fmt(v){return Math.round(Number(v)||0).toLocaleString('he-IL')} function money(v){return '₪'+fmt(v)}
+function createSurface(i){return{id:i+1,name:`Side ${i+1}`,...presets[i%presets.length]}} function surf(s){const usableArea=Math.max(s.area*CONFIG.usableRoofFactor,0),kw=usableArea/CONFIG.sqmPerKw;return{usableArea,kw,panels:Math.max(Math.floor(kw/CONFIG.panelKw),1)}}
+function ensure(){if(!state.surfaces.length)state.surfaces=[createSurface(0)]} function home(){return state.roofType!=='commercial'}
+function calculateReport(){ensure();const potential=state.surfaces.reduce((a,s)=>a+surf(s).kw,0),weightedFactor=state.surfaces.reduce((a,s)=>a+s.factor*surf(s).kw,0)/Math.max(potential,1),systemKw=home()?Math.min(potential,CONFIG.homeSystemLimitKw):potential,annualProduction=systemKw*CONFIG.productionPerKw*weightedFactor,annualConsumption=(Number(state.monthlyBill||0)*12)/CONFIG.buyRate,selfConsumed=Math.min(annualProduction*CONFIG.defaultSelfUseShare,annualConsumption),exported=Math.max(annualProduction-selfConsumed,0),annualSavings=selfConsumed*CONFIG.buyRate+exported*CONFIG.sellRate,effectiveTariff=annualSavings/Math.max(annualProduction,1),selfUseShare=selfConsumed/Math.max(annualProduction,1)*100,exportShare=100-selfUseShare,costBeforeVat=systemKw*CONFIG.installCostPerKw,costWithVat=costBeforeVat*(1+CONFIG.vatRate),paybackBeforeVat=costBeforeVat/Math.max(annualSavings,1),paybackWithVat=costWithVat/Math.max(annualSavings,1);let gross25=0;for(let y=0;y<25;y++)gross25+=selfConsumed*CONFIG.buyRate*Math.pow(1+CONFIG.electricityGrowthRate,y)+exported*CONFIG.sellRate;const roofArea=state.surfaces.reduce((a,s)=>a+s.area,0),usableArea=state.surfaces.reduce((a,s)=>a+surf(s).usableArea,0),panels=Math.max(Math.floor(systemKw/CONFIG.panelKw),1),profit25WithVat=gross25-costWithVat,profit25BeforeVat=gross25-costBeforeVat,avgTariff25=gross25/Math.max(annualProduction*25,1);return{systemKw,roofPotentialKw:potential,weightedFactor,annualProduction,annualConsumption,selfConsumed,exported,annualSavings,effectiveTariff,selfUseShare,exportShare,cost:costBeforeVat,costBeforeVat,costWithVat,payback:paybackWithVat,paybackBeforeVat,paybackWithVat,profit25:profit25WithVat,profit25BeforeVat,profit25WithVat,gross25,avgTariff25,panels,roofArea,usableArea}}
+function saveCurrentLead(r=calculateReport()){return saveLead({name:state.leadName||'ללא שם',phone:state.leadPhone||'',address:state.address||'',monthlyBill:state.monthlyBill,roofType:state.roofType,surfaces:state.surfaces,obstacles:state.obstacles,systemKw:r.systemKw,annualProduction:r.annualProduction,annualSavings:r.annualSavings,payback:r.paybackWithVat,profit25:r.profit25WithVat,status:'חדש'})}
+function logo(){return`<div class="logoMark" aria-label="Solatrix Energy"><img class="logoImage" src="${LOGO_SRC}" alt="Solatrix Energy" loading="eager" /></div>`} function link(s){return`href="${pathForStep(s)}" data-action="step:${s}"`}
+function header(){const items=[0,1,2,3,4,6].map(s=>`<a ${link(s)} class="${state.step===s?'active':''}">${ROUTES[s].label}</a>`).join('');return`<header class="siteHeader ${state.menuOpen?'menuOpen':''}"><div class="headerInner"><a class="brand" href="${SITE_ROOT}">${logo()}</a><div class="headerActions"><a class="headerCta" href="https://wa.me/${CONFIG.defaultPhone}" target="_blank" rel="noreferrer">WhatsApp</a><button class="menuBtn" data-action="toggleMenu" aria-label="Menu">${state.menuOpen?'×':'☰'}</button></div></div><nav class="mobileMenu">${items}<a href="${SITE_ROOT}">לאתר הראשי</a><a href="https://wa.me/${CONFIG.defaultPhone}" target="_blank" rel="noreferrer">WhatsApp</a></nav></header>`}
+function progress(){return state.step===0||state.step===7?'':`<div class="progressDots">${[1,2,3,4,5,6].map(s=>`<span class="${s<=state.step?'done':''}"></span>`).join('')}</div>`} function decor(){return`<div class="cardDecor" aria-hidden="true"><i></i><i></i><i></i></div>`} function floats(){return`<div class="floatingDecor" aria-hidden="true"><span>☀️</span><span>⚡</span><span>🏠</span><span>📍</span></div>`} function actions(t){return`<div class="actions"><button class="primaryBtn" data-action="next">${t}</button>${state.step>1?'<button class="ghostBtn" data-action="prev">חזרה</button>':''}</div>`}
+function mapMock(interactive=false){const polys=state.surfaces.map((s,i)=>`<polygon class="surface ${i===state.surfaces.length-1?'active':''}" points="${s.points}"></polygon>`).join(''),pins=state.obstacles.map((_,i)=>{const c=[[42,36],[66,56],[72,28],[35,64],[58,24]][i%5];return`<circle cx="${c[0]}" cy="${c[1]}" r="3.8"></circle>`}).join('');return`<div class="mapPanel ${interactive?'interactiveMap':''}" ${interactive?'data-action="markRoof"':''}><div class="mapBadge">${state.surfaces.length?'Roof marked':'Tap to mark'}</div><div class="scanPulse"></div><svg class="roofCanvas" viewBox="0 0 100 100"><defs><pattern id="grid" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M 8 0 L 0 0 0 8" fill="none" /></pattern></defs><rect x="0" y="0" width="100" height="100" class="mapBase"></rect><rect x="0" y="0" width="100" height="100" fill="url(#grid)" class="mapGrid"></rect><path class="sunRay" d="M5 15 L35 42 M4 38 L34 52 M12 60 L42 62"></path><path class="building" d="M12 14 L86 9 L92 82 L18 90 Z"></path>${polys}<g class="obstaclePins">${pins}</g></svg></div>`}
+function heroScreen(){return`<section class="screen heroScreen">${floats()}<div class="heroGrid"><div class="card centerCard heroCard">${decor()}<div class="eyebrow">Roof Check by Solatrix</div><h1>בדיקת גג סולארית</h1><p class="heroText">תוך דקה מקבלים הערכה ראשונית: שטח שימושי, כמות פאנלים, ייצור שנתי ורווח צפוי.</p><div class="featureChips"><span>☀️ חישוב מהיר</span><span>📍 לפי כתובת</span><span>📄 דוח PDF מלא</span></div><button class="primaryBtn large" data-action="next">התחילו בדיקת גג</button></div><div class="visualCard"><div class="orbit orbitOne"></div><div class="orbit orbitTwo"></div><div class="miniRoof"><div class="roofTop"></div><div class="panelRows"><span></span><span></span><span></span><span></span></div></div><div class="visualStats"><b>PDF</b><span>דוח מלא</span></div><div class="visualStats second"><b>☀️</b><span>חישוב מהיר</span></div></div></div></section>`}
+function addressScreen(){return`<section class="screen">${floats()}<div class="card focusCard">${decor()}${progress()}<div class="screenIcon">📍</div><h2>כתובת וחשבון חשמל</h2><p class="subText">החשבון החודשי עוזר לחשב כמה מהייצור יחסוך קנייה ב־₪${CONFIG.buyRate} וכמה יימכר ב־₪${CONFIG.sellRate}.</p><div class="fieldGroup"><label>כתובת הגג</label><input value="${state.address}" placeholder="לדוגמה: החרמון 10, חיפה" data-field="address" /></div><div class="fieldGroup"><label>חשבון חשמל חודשי משוער</label><input value="${state.monthlyBill}" inputmode="numeric" data-field="monthlyBill" /></div>${actions('מצא את הגג')}</div></section>`}
+function roofScreen(){return`<section class="screen">${floats()}<div class="card focusCard">${decor()}${progress()}<div class="screenIcon">🏠</div><h2>איזה סוג גג?</h2><div class="roofOptions"><button class="roofOption ${state.roofType==='flat'?'selected':''}" data-action="roof:flat"><span>▰</span><b>גג שטוח</b><small>עד ${CONFIG.homeSystemLimitKw} kW במערכת ביתית</small></button><button class="roofOption ${state.roofType==='sloped'?'selected':''}" data-action="roof:sloped"><span>◭</span><b>גג לא אחיד / כמה צדדים</b><small>נסמן כל צד בנפרד</small></button><button class="roofOption ${state.roofType==='commercial'?'selected':''}" data-action="roof:commercial"><span>▦</span><b>גג מסחרי</b><small>ללא מגבלת 22.5 kW</small></button></div>${actions('המשך לסימון')}</div></section>`}
+function drawScreen(){const c=state.surfaces.length,sl=state.roofType==='sloped';return`<section class="screen mapScreen"><div class="card mapCard">${decor()}${progress()}<div class="screenIcon">✏️</div><h2>${sl?'סמנו כל צד של הגג':'סמנו את שטח הגג'}</h2>${mapMock(true)}<div class="markStatus">${c?`סומנו ${c} שטחי גג`:'עדיין לא סומן שטח. לחצו על המפה או על הכפתור.'}</div><div class="drawFooter"><div class="actions compactActions"><button class="primaryBtn" data-action="markRoof">${sl?'+ סמן צד נוסף':'סמן גג'}</button>${c>0?'<button class="ghostBtn" data-action="removeSide">בטל אחרון</button>':''}</div><button class="nextTextBtn" data-action="next" ${c===0?'disabled':''}>סיימתי</button></div></div></section>`}
+function obstaclesScreen(){const items=[['ac','מזגן','❄️'],['boiler','דוד','💧'],['shade','צל','🌳'],['access','יציאה לגג','🚪'],['solar','קולטים קיימים','☀️']];return`<section class="screen mapScreen"><div class="card mapCard">${decor()}${progress()}<div class="screenIcon">🧩</div><h2>מה נמצא על הגג?</h2>${mapMock()}<div class="obstacleGrid">${items.map(([k,l,i])=>`<button class="obstacle ${state.obstacles.includes(k)?'selected':''}" data-action="obstacle:${k}"><span>${i}</span>${l}</button>`).join('')}</div>${actions('המשך')}</div></section>`}
+function analysisScreen(){return`<section class="screen">${floats()}<div class="card centerCard analysisCard">${decor()}<div class="loader"></div><h2>מנתחים את הגג...</h2><p class="subText">בודקים שטח שימושי, כיוונים, צריכה עצמית, מכירה לרשת והחזר השקעה.</p><div class="analysisBadges"><span>שטח</span><span>ייצור</span><span>תעריף משולב</span><span>ROI</span></div></div></section>`}
+function tariffMix(r){const sw=Math.max(8,Math.min(92,r.selfUseShare)),ew=Math.max(8,Math.min(92,r.exportShare));return`<div class="tariffMix"><div class="mixHead"><b>תמהיל חיסכון ומכירה</b><span>תעריף אפקטיבי: ₪${r.effectiveTariff.toFixed(3)} לקוט״ש</span></div><div class="mixBar"><i style="width:${sw}%"></i><em style="width:${ew}%"></em></div><div class="mixLegend"><span><i></i>צריכה עצמית: ${fmt(r.selfConsumed)} kWh לפי ₪${CONFIG.buyRate}</span><span><em></em>מכירה לרשת: ${fmt(r.exported)} kWh לפי ₪${CONFIG.sellRate}</span></div></div>`}
+function reportScreen(){const r=calculateReport(),note=home()&&r.roofPotentialKw>CONFIG.homeSystemLimitKw?`<div class="successToast">מערכת ביתית מוגבלת ל-${CONFIG.homeSystemLimitKw} kW. פוטנציאל הגג לפי שטח: ${r.roofPotentialKw.toFixed(1)} kW.</div>`:'';return`<section class="screen reportScreen">${floats()}<div class="card reportCard">${decor()}<div class="eyebrow">דוח סולארי ראשוני</div><h2>הגג מתאים למערכת של כ-${r.systemKw.toFixed(1)} kW</h2><div class="reportHeroGraphic"><div><strong>${money(r.annualSavings)}</strong><span>חיסכון/הכנסה שנתית משוערת</span></div><div><strong>${r.paybackWithVat.toFixed(1)}</strong><span>שנים החזר כולל מע״מ</span></div></div>${note}${tariffMix(r)}<div class="resultsGrid"><div><span>עלות לפני מע״מ</span><b>${money(r.costBeforeVat)}</b></div><div><span>עלות כולל מע״מ</span><b>${money(r.costWithVat)}</b></div><div><span>שטח גג</span><b>${fmt(r.roofArea)} m²</b></div><div><span>שטח שימושי</span><b>${fmt(r.usableArea)} m²</b></div><div><span>פאנלים</span><b>${r.panels}</b></div><div><span>ייצור שנתי</span><b>${fmt(r.annualProduction)} kWh</b></div><div><span>ערך קוט״ש ממוצע</span><b>₪${r.effectiveTariff.toFixed(3)}</b></div><div><span>חיסכון/הכנסה שנתית</span><b>${money(r.annualSavings)}</b></div><div><span>החזר לפני מע״מ</span><b>${r.paybackBeforeVat.toFixed(1)} שנים</b></div><div><span>החזר כולל מע״מ</span><b>${r.paybackWithVat.toFixed(1)} שנים</b></div><div><span>חיסכון 25 שנים</span><b>${money(r.gross25)}</b></div><div><span>רווח 25 שנים כולל מע״מ</span><b>${money(r.profit25WithVat)}</b></div></div><div class="leadFields"><input placeholder="שם מלא" value="${state.leadName}" data-field="leadName" /><input placeholder="טלפון WhatsApp" value="${state.leadPhone}" data-field="leadPhone" /></div><button class="primaryBtn large" data-action="generatePdf">קבלו דוח PDF מלא</button>${state.leadSent?'<div class="successToast">הדוח נפתח והפנייה נשמרה.</div>':''}</div></section>`}
+function adminScreen(){const leads=getLeads(),selected=state.selectedLeadId?leads.find(l=>l.id===state.selectedLeadId):leads[0],cards=[['סה״כ לידים',leads.length],['חדשים',leads.filter(l=>l.status==='חדש').length],['סיורים',leads.filter(l=>l.status==='נקבע סיור').length],['עסקאות',leads.filter(l=>l.status==='עסקה').length]];return`<section class="screen adminScreen"><div class="card adminCard">${decor()}<div class="eyebrow">Solatrix CRM</div><h2>לוח בקרה לידים</h2><div class="adminStats">${cards.map(([l,v])=>`<div><span>${l}</span><b>${v}</b></div>`).join('')}</div><div class="adminLayout"><div class="leadsTable"><table><thead><tr><th>שם</th><th>טלפון</th><th>כתובת</th><th>מערכת</th><th>סטטוס</th></tr></thead><tbody>${leads.length?leads.map(l=>`<tr data-action="selectLead:${l.id}"><td>${l.name}</td><td>${l.phone||'-'}</td><td>${l.address||'-'}</td><td>${Number(l.systemKw||0).toFixed(1)} kW</td><td>${l.status}</td></tr>`).join(''):'<tr><td colspan="5">אין עדיין לידים. צור דוח PDF כדי לשמור ליד ראשון.</td></tr>'}</tbody></table></div>${selected?`<div class="leadDetail"><h3>${selected.name}</h3><p>${selected.address||'אין כתובת'}<br/>${selected.phone||'אין טלפון'}</p><div class="resultsGrid"><div><span>מערכת</span><b>${Number(selected.systemKw||0).toFixed(1)} kW</b></div><div><span>חיסכון שנתי</span><b>${money(selected.annualSavings||0)}</b></div><div><span>החזר</span><b>${Number(selected.payback||0).toFixed(1)} שנים</b></div></div><label class="fieldGroup"><span>סטטוס</span><select data-lead-status="${selected.id}">${LEAD_STATUSES.map(s=>`<option ${s===selected.status?'selected':''}>${s}</option>`).join('')}</select></label>${mapMock(false)}</div>`:''}</div></div></section>`}
+function generatePdfReport(){const r=calculateReport();saveCurrentLead(r);const html=buildFullPdfReport({report:r,state,config:CONFIG,logoSrc:LOGO_SRC,formatNumber:fmt,formatMoney:money});const win=window.open('','_blank');if(!win)return;win.document.open();win.document.write(html);win.document.close();state.leadSent=true;render()}
+function renderScreen(){if(state.step===0)return heroScreen();if(state.step===1)return addressScreen();if(state.step===2)return roofScreen();if(state.step===3)return drawScreen();if(state.step===4)return obstaclesScreen();if(state.step===5)return analysisScreen();if(state.step===7)return adminScreen();return reportScreen()}
+function handleAction(a,n){if(n.disabled)return;if(a==='toggleMenu'){state.menuOpen=!state.menuOpen;render()}if(a==='closeMenu'){if(state.menuOpen){state.menuOpen=false;render()}}if(a==='next')setStep(state.step+1);if(a==='prev')setStep(state.step-1);if(a==='markRoof'){state.roofType==='sloped'?state.surfaces.push(createSurface(state.surfaces.length)):state.surfaces=[createSurface(0)];render()}if(a==='removeSide'){state.surfaces.pop();render()}if(a==='generatePdf')generatePdfReport();if(a&&a.startsWith('step:'))setStep(Number(a.split(':')[1]));if(a&&a.startsWith('roof:')){state.roofType=a.split(':')[1];state.surfaces=[];render()}if(a&&a.startsWith('obstacle:')){const v=a.split(':')[1];state.obstacles=state.obstacles.includes(v)?state.obstacles.filter(i=>i!==v):[...state.obstacles,v];render()}if(a&&a.startsWith('selectLead:')){state.selectedLeadId=a.split(':')[1];render()}}
+function render(){const root=document.getElementById('root');root.innerHTML=`${header()}<main class="appShell" data-action="closeMenu">${renderScreen()}</main>`;root.querySelectorAll('[data-action]').forEach(n=>n.addEventListener('click',e=>{const a=n.getAttribute('data-action');if(a!=='closeMenu')e.preventDefault();handleAction(a,n)}));root.querySelectorAll('[data-field]').forEach(n=>n.addEventListener('input',()=>{state[n.getAttribute('data-field')]=n.value}));root.querySelectorAll('[data-lead-status]').forEach(n=>n.addEventListener('change',()=>{updateLeadStatus(n.getAttribute('data-lead-status'),n.value);render()}))}
+window.addEventListener('popstate',()=>{clearTimeout(state.analysisTimer);const r=routeFromLocation();state.step=r.step;state.menuOpen=false;title();render()});nav(state.step,{replace:true});render();
