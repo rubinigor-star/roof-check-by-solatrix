@@ -54,9 +54,11 @@
   position: relative;
 }
 
-.interactiveMap *,
-.interactiveMap svg,
-.interactiveMap svg * {
+/* For the original SVG mock map we route clicks to the map panel.
+   When the real Leaflet map is injected, child tiles/markers must keep pointer events. */
+.interactiveMap:not(.solatrixMapInjected) *,
+.interactiveMap:not(.solatrixMapInjected) svg,
+.interactiveMap:not(.solatrixMapInjected) svg * {
   pointer-events: none;
 }
 
@@ -96,30 +98,5 @@
 
   .menuBtn {
     display: none;
-  }
-}
-
-@media (max-width: 680px) {
-  .headerInner {
-    min-height: 66px;
-  }
-
-  .brand,
-  .logoMark {
-    height: 56px;
-  }
-
-  .logoMark {
-    width: 152px;
-  }
-
-  .logoImage {
-    width: 148px;
-    max-height: 50px;
-  }
-
-  .mobileMenu a,
-  .mobileMenu button {
-    min-height: 50px;
   }
 }
