@@ -48,6 +48,33 @@
   background: #fff8e8;
 }
 
+/* Make the full roof map reliably clickable on desktop and mobile.
+   SVG children can capture taps on some browsers, so clicks are routed to .interactiveMap. */
+.interactiveMap {
+  cursor: pointer;
+  touch-action: manipulation;
+  position: relative;
+}
+
+.interactiveMap *,
+.interactiveMap svg,
+.interactiveMap svg * {
+  pointer-events: none;
+}
+
+.mapPanel[data-action="markRoof"] {
+  cursor: pointer;
+}
+
+.mapPanel[data-action="markRoof"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  z-index: 5;
+  pointer-events: none;
+}
+
 @media (min-width: 980px) {
   .desktopNav {
     display: flex;
