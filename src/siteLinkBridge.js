@@ -1,3 +1,4 @@
+const CALCULATOR_MASTER_VERSION = 'roof-check-master-v1';
 const calculatorPath = 'roof-check/';
 const calculatorKeywords = [
   /roof\s*check/i,
@@ -5,6 +6,7 @@ const calculatorKeywords = [
   /בדיקת\s*גג/,
   /בדקו\s*את\s*הגג/,
   /בדקו\s*גג/,
+  /התחילו\s*בבדיקת\s*הגג/,
   /הגג\s*שלכם/,
   /בדיקה\s*חכמה/,
   /חישוב\s*גג/,
@@ -47,7 +49,9 @@ function siteRootUrl() {
 }
 
 function calculatorUrl() {
-  return new URL(calculatorPath, siteRootUrl()).href;
+  const url = new URL(calculatorPath, siteRootUrl());
+  url.searchParams.set('v', CALCULATOR_MASTER_VERSION);
+  return url.href;
 }
 
 function textMatches(text = '', patterns = calculatorKeywords) {
@@ -56,13 +60,13 @@ function textMatches(text = '', patterns = calculatorKeywords) {
 }
 
 function hrefMatchesCalculator(href = '') {
-  return /roof-check\.html/i.test(href) || /#.*roof/i.test(href) || /#.*גג/i.test(href);
+  return /roof-check(?:\.html|\/)?/i.test(href) || /#.*roof/i.test(href) || /#.*גג/i.test(href);
 }
 
 function injectDecisionBlockStyles() {
-  if (document.getElementById('solatrix-decision-block-v2-style')) return;
+  if (document.getElementById('solatrix-decision-block-master-style')) return;
   const style = document.createElement('style');
-  style.id = 'solatrix-decision-block-v2-style';
+  style.id = 'solatrix-decision-block-master-style';
   style.textContent = `
     #decision .decision-grid-v2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:26px 0 22px}
     #decision .decision-card-v2{background:#fff;border:1px solid var(--line);border-radius:26px;padding:24px 24px 22px;box-shadow:0 18px 46px rgba(42,33,24,.06)}
@@ -80,8 +84,8 @@ function injectDecisionBlockStyles() {
 function replaceDecisionBlock() {
   if (!isHomePage()) return;
   const section = document.getElementById('decision');
-  if (!section || section.dataset.solatrixDecisionV2 === 'true') return;
-  section.dataset.solatrixDecisionV2 = 'true';
+  if (!section || section.dataset.solatrixDecisionMaster === 'true') return;
+  section.dataset.solatrixDecisionMaster = 'true';
   injectDecisionBlockStyles();
   section.innerHTML = `
     <div class="container statement-grid">
@@ -92,14 +96,14 @@ function replaceDecisionBlock() {
       <div class="statement-card">
         <p>ברוב המקרים זה לא בגלל שהשמש לא מספיקה. זה בגלל שאין תשובות ברורות לשאלות שבאמת קובעות אם כדאי להתקדם.</p>
         <div class="decision-grid-v2">
-          <div class="decision-card-v2"><span>01</span><h3>כמה הגג שלי באמת יכול לייצר?</h3><p>לא לפי ניחוש כללי — אלא לפי שטח, כיוון, הצללות ומבנה הגג.</p></div>
-          <div class="decision-card-v2"><span>02</span><h3>מה המחיר האמיתי של מערכת כזו?</h3><p>לא “נחזור אליכם עם הצעה”, אלא להבין כבר בהתחלה סדרי גודל.</p></div>
-          <div class="decision-card-v2"><span>03</span><h3>תוך כמה זמן ההשקעה חוזרת?</h3><p>לא רק כמה פאנלים נכנסים, אלא כמה כסף זה באמת חוסך או מייצר.</p></div>
-          <div class="decision-card-v2"><span>04</span><h3>האם ההצעה שקיבלתי הגיונית?</h3><p>כדי לדעת אם המחיר, ההספק והציוד באמת מתאימים לנכס שלכם.</p></div>
+          <div class="decision-card-v2"><span>01</span><h3>כמה הגג שלי באמת יכול לייצר?</h3><p>לא לפי ניחוש כללי — אלא לפי סימון גג, שטח, כיוון ומבנה.</p></div>
+          <div class="decision-card-v2"><span>02</span><h3>מה המחיר האמיתי של מערכת כזו?</h3><p>החישוב מחובר למחיר בסיס שקוף: ₪2,900 לקילוואט לפני מע״מ.</p></div>
+          <div class="decision-card-v2"><span>03</span><h3>תוך כמה זמן ההשקעה חוזרת?</h3><p>המערכת מחשבת חיסכון, מכירה לרשת, מע״מ והחזר השקעה.</p></div>
+          <div class="decision-card-v2"><span>04</span><h3>איך מקבלים דוח מסודר?</h3><p>בסוף הבדיקה נפתח דוח Master בן 3 עמודים עם בסיס החישוב.</p></div>
         </div>
         <div class="decision-bottom-v2">
-          <div class="soft-note">בדיוק בשביל זה בנינו את Solatrix: קודם לראות את התמונה, אחר כך לקבל החלטה.</div>
-          <a class="decision-cta-v2" href="${calculatorUrl()}">בדקו את הגג שלכם</a>
+          <div class="soft-note">בדיוק בשביל זה בנינו את Solatrix Roof Check Master: קודם לראות את התמונה, אחר כך לקבל החלטה.</div>
+          <a class="decision-cta-v2" href="${calculatorUrl()}" data-solatrix-master-roof-check="true">בדקו את הגג שלכם</a>
         </div>
       </div>
     </div>
@@ -116,7 +120,7 @@ function connectRoofCheckLinks() {
     const href = link.getAttribute('href') || '';
     if (textMatches(label) || hrefMatchesCalculator(href)) {
       link.setAttribute('href', target);
-      link.setAttribute('data-solatrix-linked-calculator', 'true');
+      link.setAttribute('data-solatrix-linked-calculator', CALCULATOR_MASTER_VERSION);
     } else if (textMatches(label, contactKeywords) && !/wa\.me|whatsapp/i.test(href)) {
       link.setAttribute('href', '#lead-form');
       link.setAttribute('data-solatrix-open-lead-form', 'true');
@@ -126,7 +130,7 @@ function connectRoofCheckLinks() {
   document.querySelectorAll('button, [role="button"]').forEach((button) => {
     const label = button.textContent || '';
     if (textMatches(label)) {
-      button.setAttribute('data-solatrix-linked-calculator', 'true');
+      button.setAttribute('data-solatrix-linked-calculator', CALCULATOR_MASTER_VERSION);
       button.addEventListener('click', (event) => {
         event.preventDefault();
         window.location.href = target;
