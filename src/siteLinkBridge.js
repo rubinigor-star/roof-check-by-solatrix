@@ -64,19 +64,28 @@ function hrefMatchesCalculator(href = '') {
 }
 
 function injectDecisionBlockStyles() {
-  if (document.getElementById('solatrix-decision-block-master-style')) return;
+  if (document.getElementById('solatrix-price-truth-block-style')) return;
   const style = document.createElement('style');
-  style.id = 'solatrix-decision-block-master-style';
+  style.id = 'solatrix-price-truth-block-style';
   style.textContent = `
-    #decision .decision-grid-v2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:26px 0 22px}
-    #decision .decision-card-v2{background:#fff;border:1px solid var(--line);border-radius:26px;padding:24px 24px 22px;box-shadow:0 18px 46px rgba(42,33,24,.06)}
-    #decision .decision-card-v2 span{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:15px;background:#fff3df;color:#a76200;font-size:22px;font-weight:950;margin-bottom:14px}
-    #decision .decision-card-v2 h3{font-size:24px;line-height:1.12;margin:0 0 10px;color:#17120d;letter-spacing:-.018em}
-    #decision .decision-card-v2 p{font-size:18px;line-height:1.55;margin:0;color:#5f564c;font-weight:700}
-    #decision .decision-bottom-v2{display:grid;gap:16px;margin-top:20px}
-    #decision .decision-bottom-v2 .soft-note{font-size:19px;line-height:1.55}
-    #decision .decision-cta-v2{display:inline-flex;align-items:center;justify-content:center;width:max-content;max-width:100%;border-radius:999px;padding:15px 26px;background:linear-gradient(135deg,var(--orange),var(--orange2));color:#16100a;font-weight:950;text-decoration:none;box-shadow:0 16px 34px rgba(245,161,26,.22)}
-    @media(max-width:900px){#decision .decision-grid-v2{grid-template-columns:1fr}#decision .decision-card-v2{padding:22px}#decision .decision-cta-v2{width:100%}}
+    #decision .price-truth-grid{display:grid;grid-template-columns:.92fr 1.08fr;gap:72px;align-items:start}
+    #decision .price-truth-eyebrow{font-weight:950;letter-spacing:.06em;color:#b66d00;margin-bottom:12px}
+    #decision .price-truth-title{font-size:clamp(40px,4.8vw,64px);line-height:.96;letter-spacing:-.045em;margin:0;color:#17120d}
+    #decision .price-truth-card{background:linear-gradient(180deg,#fff,#fff7eb);border:1px solid var(--line);border-radius:34px;padding:44px;box-shadow:0 22px 60px rgba(42,33,24,.06)}
+    #decision .price-truth-lead{font-size:22px;line-height:1.55;margin:0 0 24px;color:#3b332b;font-weight:720}
+    #decision .price-anchor{display:grid;grid-template-columns:1fr auto;gap:24px;align-items:center;margin:26px 0;padding:28px;border-radius:30px;background:linear-gradient(135deg,#17120d,#3c2f22);color:#fff;box-shadow:0 24px 58px rgba(42,33,24,.16)}
+    #decision .price-anchor span{display:block;color:#ffd18a;font-weight:950;margin-bottom:6px}
+    #decision .price-anchor b{display:block;font-size:clamp(34px,5vw,58px);line-height:.92;letter-spacing:-.04em;direction:ltr;text-align:left;color:#fff}
+    #decision .price-anchor small{display:block;color:rgba(255,255,255,.72);font-weight:800;margin-top:7px}
+    #decision .price-pill{display:inline-flex;align-items:center;justify-content:center;width:92px;height:92px;border-radius:28px;background:linear-gradient(135deg,var(--orange),var(--orange2));color:#17120d;font-size:34px;font-weight:950;box-shadow:0 16px 34px rgba(245,161,26,.26)}
+    #decision .price-truth-points{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:24px 0 22px}
+    #decision .price-truth-point{background:#fff;border:1px solid var(--line);border-radius:24px;padding:20px 18px;box-shadow:0 14px 34px rgba(42,33,24,.045)}
+    #decision .price-truth-point b{display:block;font-size:19px;line-height:1.15;color:#17120d;margin-bottom:8px}
+    #decision .price-truth-point p{margin:0;font-size:16px;line-height:1.45;color:#5f564c;font-weight:720}
+    #decision .price-truth-bottom{display:grid;gap:16px;margin-top:20px}
+    #decision .price-truth-note{background:#fff3df;border:1px solid #f1d0a0;border-radius:22px;padding:20px 22px;font-size:19px;line-height:1.55;font-weight:850;color:#3a2b19}
+    #decision .price-truth-cta{display:inline-flex;align-items:center;justify-content:center;width:max-content;max-width:100%;border-radius:999px;padding:15px 26px;background:linear-gradient(135deg,var(--orange),var(--orange2));color:#16100a;font-weight:950;text-decoration:none;box-shadow:0 16px 34px rgba(245,161,26,.22)}
+    @media(max-width:900px){#decision .price-truth-grid{grid-template-columns:1fr;gap:34px}#decision .price-truth-card{padding:26px 22px;border-radius:28px}#decision .price-anchor{grid-template-columns:1fr;padding:22px}#decision .price-pill{width:68px;height:68px;border-radius:22px;font-size:26px}#decision .price-truth-points{grid-template-columns:1fr}#decision .price-truth-cta{width:100%}}
   `;
   document.head.appendChild(style);
 }
@@ -84,26 +93,33 @@ function injectDecisionBlockStyles() {
 function replaceDecisionBlock() {
   if (!isHomePage()) return;
   const section = document.getElementById('decision');
-  if (!section || section.dataset.solatrixDecisionMaster === 'true') return;
-  section.dataset.solatrixDecisionMaster = 'true';
+  if (!section || section.dataset.solatrixPriceTruth === 'true') return;
+  section.dataset.solatrixPriceTruth = 'true';
   injectDecisionBlockStyles();
   section.innerHTML = `
-    <div class="container statement-grid">
+    <div class="container price-truth-grid">
       <div class="sticky-title">
-        <div class="kicker dark">הסיבה האמיתית לגגות הריקים</div>
-        <h2>למה אנשים עדיין לא שמים מערכת סולארית, גם כשהמספרים נראים טוב?</h2>
+        <div class="price-truth-eyebrow">מחיר בסיס שקוף</div>
+        <h2 class="price-truth-title">למה מחיר של מערכת סולארית לא צריך להיות סוד?</h2>
       </div>
-      <div class="statement-card">
-        <p>ברוב המקרים זה לא בגלל שהשמש לא מספיקה. זה בגלל שאין תשובות ברורות לשאלות שבאמת קובעות אם כדאי להתקדם.</p>
-        <div class="decision-grid-v2">
-          <div class="decision-card-v2"><span>01</span><h3>כמה הגג שלי באמת יכול לייצר?</h3><p>לא לפי ניחוש כללי — אלא לפי סימון גג, שטח, כיוון ומבנה.</p></div>
-          <div class="decision-card-v2"><span>02</span><h3>מה המחיר האמיתי של מערכת כזו?</h3><p>החישוב מחובר למחיר בסיס שקוף: ₪2,900 לקילוואט לפני מע״מ.</p></div>
-          <div class="decision-card-v2"><span>03</span><h3>תוך כמה זמן ההשקעה חוזרת?</h3><p>המערכת מחשבת חיסכון, מכירה לרשת, מע״מ והחזר השקעה.</p></div>
-          <div class="decision-card-v2"><span>04</span><h3>איך מקבלים דוח מסודר?</h3><p>בסוף הבדיקה נפתח דוח Master בן 3 עמודים עם בסיס החישוב.</p></div>
+      <div class="price-truth-card">
+        <p class="price-truth-lead">הרבה חברות מתחילות ב״נחזור אליכם עם הצעה״. אנחנו מעדיפים לתת לכם נקודת התחלה ברורה כבר באתר — כדי שתוכלו להבין אם המספרים בכלל מתאימים לכם לפני פגישה.</p>
+        <div class="price-anchor">
+          <div>
+            <span>מחיר בסיס לתכנון ראשוני</span>
+            <b>₪2,900</b>
+            <small>לקילוואט לפני מע״מ. המחיר הסופי תלוי בגג, חשמל, קונסטרוקציה וציוד.</small>
+          </div>
+          <div class="price-pill">₪</div>
         </div>
-        <div class="decision-bottom-v2">
-          <div class="soft-note">בדיוק בשביל זה בנינו את Solatrix Roof Check Master: קודם לראות את התמונה, אחר כך לקבל החלטה.</div>
-          <a class="decision-cta-v2" href="${calculatorUrl()}" data-solatrix-master-roof-check="true">בדקו את הגג שלכם</a>
+        <div class="price-truth-points">
+          <div class="price-truth-point"><b>קודם סדר גודל</b><p>לא חייבים לחכות להצעת מחיר כדי להבין אם הפרויקט בכיוון נכון.</p></div>
+          <div class="price-truth-point"><b>אחר כך בדיקת גג</b><p>Roof Check מחבר שטח גג, ייצור, צריכה עצמית ומכירה לרשת.</p></div>
+          <div class="price-truth-point"><b>בלי הבטחות ריקות</b><p>הדוח מציג גם את המספרים וגם את ההנחות שמאחוריהם.</p></div>
+        </div>
+        <div class="price-truth-bottom">
+          <div class="price-truth-note">השלב הבא הוא לבדוק את הגג שלכם בפועל: מסמנים את הגג, מקבלים הערכה ראשונית ומורידים דוח מסודר.</div>
+          <a class="price-truth-cta" href="${calculatorUrl()}" data-solatrix-master-roof-check="true">בדקו את הגג שלכם</a>
         </div>
       </div>
     </div>
