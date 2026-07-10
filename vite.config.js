@@ -27,11 +27,6 @@ function injectSolatrixScripts() {
 export default defineConfig({
   base: './',
   plugins: [injectSolatrixScripts()],
-  resolve: {
-    alias: [
-      { find: './src/pdfReport.js', replacement: '/src/pdfReportHotfix.js' }
-    ]
-  },
   build: {
     rollupOptions: {
       input: {
